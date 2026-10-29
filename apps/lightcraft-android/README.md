@@ -55,19 +55,22 @@ rebuilds only what changed. Gradle finds `cargo` in `~/.cargo/bin` (or `$CARGO`)
 
 ### librclone (the cloud library)
 
-The cloud library reaches a PC's published photos through rclone's C library, which is not built by
-Gradle. Build it once with [Go](https://go.dev) installed (`scripts/build-librclone.sh`: pinned to rclone
-v1.75.2, a reduced backend set; add `LIBRCLONE_FULL=1` for all of them):
+The cloud library reaches a PC's published photos through rclone's C library. Gradle builds it with
+[Go](https://go.dev) (`librcloneBuild<Variant>`, which runs `scripts/build-librclone.sh`) into
+`android/app/build/` and packages it, next to the Rust library. The Go module is `librclone/`
+(rclone v1.75.2 in `go.mod`/`go.sum`, a reduced backend set; `LIBRCLONE_FULL=1` builds all of them).
 
-```sh
-apps/lightcraft-android/scripts/build-librclone.sh                  # arm64-v8a, armeabi-v7a and the host
-apps/lightcraft-android/scripts/build-librclone.sh arm64-v8a x86_64 # chosen ABIs
-```
+- **Go version**: `librclone/GO_VERSION` (with the download's sha256 in `GO_LINUX_AMD64_SHA256`) is
+  the one place it is pinned; CI and F-Droid install it with `scripts/install-go.sh`. A release
+  build fails unless it finds exactly that Go; a debug build takes any Go that rclone accepts
+  (`-Plightcraft.go=<root>`, `GO_ROOT`, the pinned one if installed, PATH, `~/.local/go`), and
+  without Go it warns and builds without librclone (opening a cloud library then fails with
+  "librclone.so not found").
+- **Host library** for `cargo test -p lightcraft-cloud-client`: `scripts/build-librclone.sh host`
+  (lands in the gitignored `librclone-host/`). Other ABIs by hand:
+  `scripts/build-librclone.sh -o DIR arm64-v8a x86_64`.
 
-The Android libraries land in `android/app/src/main/jniLibs/<abi>/` (Gradle packages them as they
-are), the host one in `librclone-host/` (used by `cargo test -p lightcraft-cloud-client`). Nothing
-built is committed. Without them the app still builds; connecting to a cloud library fails with
-"librclone.so not found". See [docs/cloud-library.md](docs/cloud-library.md).
+See [docs/cloud-library.md](docs/cloud-library.md).
 
 ## How it works
 

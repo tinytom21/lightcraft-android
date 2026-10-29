@@ -1,3 +1,4 @@
+import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
@@ -12,6 +13,8 @@ val cargoWorkspaceDir: File = rootDir.parentFile.parentFile.parentFile
 val rustAbis: List<String> =
     providers.gradleProperty("lightcraft.abis").getOrElse("arm64-v8a,x86_64").split(',').map { it.trim() }.filter { it.isNotEmpty() }
 val minApi = 29
+// the Go module of rclone's C library, built by scripts/build-librclone.sh
+val appDir: File = rootDir.parentFile
 
 // The app's version: gradle.properties' lightcraft.version, or the version tag's when the release
 // workflow builds a release. The version code follows from it (0.0.1-beta → 101, 0.0.1-beta.2 →
@@ -88,6 +91,74 @@ abstract class CargoNdkBuild : DefaultTask() {
                 listOf(cargo.get(), "ndk") + targets +
                     listOf("--platform", apiLevel.get().toString(), "-o", out, "build", "--release", "--locked", "-p", "lightcraft-android", "--lib"),
             )
+        }
+    }
+}
+
+/**
+ * Builds `librclone.so` (rclone's C library, for the cloud library) for each ABI with Go, through
+ * scripts/build-librclone.sh, into [outputDir]. A release build needs exactly the Go release
+ * librclone/GO_VERSION pins and fails without it; any other build takes the Go it finds, or warns
+ * and leaves librclone out (the app then can't open a cloud library).
+ */
+abstract class LibrcloneBuild : DefaultTask() {
+    @get:Inject abstract val execOperations: ExecOperations
+    @get:InputFile @get:PathSensitive(PathSensitivity.NONE) abstract val script: RegularFileProperty
+    @get:InputFile @get:PathSensitive(PathSensitivity.NONE) abstract val goVersionFile: RegularFileProperty
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val module: ConfigurableFileCollection
+    /** A Go root to try first (`lightcraft.go`, else `GO_ROOT`), then the one scripts/install-go.sh makes, PATH and ~/.local/go. */
+    @get:Input @get:Optional abstract val goRoot: Property<String>
+    @get:Input abstract val strict: Property<Boolean>
+    @get:Input abstract val ndkDir: Property<String>
+    @get:Input abstract val abis: ListProperty<String>
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    init {
+        // a build without Go leaves nothing to be up to date with, and the Go found isn't an input
+        outputs.upToDateWhen { task ->
+            with(task as LibrcloneBuild) { abis.get().all { File(outputDir.get().asFile, "$it/librclone.so").isFile } }
+        }
+    }
+
+    @TaskAction
+    fun build() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        val want = "go" + goVersionFile.get().asFile.readText().trim()
+        val home = File(System.getProperty("user.home"))
+        val roots = listOf<String?>(goRoot.orNull, File(home, ".cache/lightcraft/go-${want.removePrefix("go")}/go").path, null, File(home, ".local/go").path)
+        // (root, its version) of each Go that runs; a null root is the one on PATH
+        val found = roots.mapNotNull { root ->
+            val exe = if (root == null) "go" else File(root, "bin/go").path
+            val version = try {
+                val stdout = ByteArrayOutputStream()
+                val result = execOperations.exec {
+                    commandLine(exe, "env", "GOVERSION")
+                    environment("GOTOOLCHAIN", "local")
+                    standardOutput = stdout
+                    isIgnoreExitValue = true
+                }
+                if (result.exitValue == 0) stdout.toString().trim() else null
+            } catch (e: Exception) {
+                null
+            }
+            version?.let { root to it }
+        }
+        val pick = found.firstOrNull { it.second == want } ?: if (strict.get()) null else found.firstOrNull()
+        if (pick == null) {
+            val message = "librclone needs Go ${want.removePrefix("go")} (librclone/GO_VERSION)" +
+                (if (found.isEmpty()) ", and no Go was found" else ", found ${found.joinToString { it.second }}") +
+                ": run apps/lightcraft-android/scripts/install-go.sh, or set GO_ROOT or -Plightcraft.go"
+            if (strict.get()) throw GradleException(message)
+            logger.warn("WARNING: $message. Building without librclone: the app won't open a cloud library.")
+            return
+        }
+        execOperations.exec {
+            commandLine(listOf(script.get().asFile.path, "-o", out.path) + abis.get())
+            environment("ANDROID_NDK_HOME", ndkDir.get())
+            pick.first?.let { environment("GO_ROOT", it) }
+            if (strict.get()) environment("LIBRCLONE_STRICT", "1")
         }
     }
 }
@@ -209,6 +280,17 @@ androidComponents {
             workspaceDir.set(cargoWorkspaceDir.absolutePath)
             library.set(cargoBuild.flatMap { it.outputDir.file("${rustAbis.first()}/liblightcraft_android.so") })
         }
+        val librclone = tasks.register<LibrcloneBuild>("librcloneBuild$name") {
+            group = "rust"
+            description = "Builds librclone.so for $rustAbis"
+            script.set(File(appDir, "scripts/build-librclone.sh"))
+            goVersionFile.set(File(appDir, "librclone/GO_VERSION"))
+            module.from(fileTree(File(appDir, "librclone")) { exclude("out") })
+            goRoot.set(providers.gradleProperty("lightcraft.go").orElse(providers.environmentVariable("GO_ROOT")))
+            strict.set(variant.buildType == "release")
+            ndkDir.set(androidComponents.sdkComponents.ndkDirectory.map { it.asFile.absolutePath })
+            abis.set(rustAbis)
+        }
         val assetsDir = File(cargoWorkspaceDir, "assets")
         val res = tasks.register<LightcraftAssets>("lightcraftResources$name") {
             val map = mapOf(
@@ -225,6 +307,7 @@ androidComponents {
             targets.set(mapOf("OFL-Inter.txt" to "licences/OFL-Inter.txt"))
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoBuild, CargoNdkBuild::outputDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(librclone, LibrcloneBuild::outputDir)
         variant.sources.java?.addGeneratedSourceDirectory(bindgen, UniffiBindgen::outputDir)
         variant.sources.res?.addGeneratedSourceDirectory(res, LightcraftAssets::outputDir)
         variant.sources.assets?.addGeneratedSourceDirectory(licences, LightcraftAssets::outputDir)

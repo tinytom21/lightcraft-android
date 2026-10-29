@@ -1,3 +1,4 @@
 # built by scripts/build-librclone.sh
 /librclone-host/
+/librclone/out/
 /android/app/src/main/jniLibs/

@@ -18,7 +18,7 @@ Builds:
     subdir: apps/lightcraft-android/android/app
     sudo:
       - apt-get update
-      - apt-get install -y gcc libc-dev rustup
+      - apt-get install -y gcc libc-dev rustup curl
     gradle:
       - yes
     binary: 
@@ -28,6 +28,7 @@ Builds:
         --profile minimal --target armv7-linux-androideabi
       - cargo install --locked --version $(sed -n -E 's/.*cargo install cargo-ndk
         --version ([0-9.]+).*/\1/p' ../../../../.github/workflows/release.yml) cargo-ndk
+      - ../../scripts/install-go.sh
     ndk: 29.0.14206865
     gradleprops:
       - lightcraft.abis=armeabi-v7a
@@ -39,7 +40,7 @@ Builds:
     subdir: apps/lightcraft-android/android/app
     sudo:
       - apt-get update
-      - apt-get install -y gcc libc-dev rustup
+      - apt-get install -y gcc libc-dev rustup curl
     gradle:
       - yes
     binary: 
@@ -49,6 +50,7 @@ Builds:
         --profile minimal --target aarch64-linux-android
       - cargo install --locked --version $(sed -n -E 's/.*cargo install cargo-ndk
         --version ([0-9.]+).*/\1/p' ../../../../.github/workflows/release.yml) cargo-ndk
+      - ../../scripts/install-go.sh
     ndk: 29.0.14206865
     gradleprops:
       - lightcraft.abis=arm64-v8a

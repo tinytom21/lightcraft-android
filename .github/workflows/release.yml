@@ -72,6 +72,16 @@ jobs:
           cargo install cargo-ndk --version 4.1.2 --locked
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
 
+      # the Go release apps/lightcraft-android/librclone/GO_VERSION pins, checked against its sha256 (the
+      # same script F-Droid's recipe runs); rclone's C library, built by Gradle, needs it
+      - name: Install Go
+        run: echo "GO_ROOT=$(apps/lightcraft-android/scripts/install-go.sh)" >>"$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/go/pkg/mod
+          key: go-mod-${{ hashFiles('apps/lightcraft-android/librclone/go.sum') }}
+
       - name: Release key
         env:
           KEYSTORE_BASE64: ${{ secrets.LIGHTCRAFT_KEYSTORE_BASE64 }}

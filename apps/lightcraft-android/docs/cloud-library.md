@@ -97,5 +97,7 @@ Raw + JPEG pairs of one shot are one photo: the app lists the partner too, but h
 
 ## Building the app
 
-The app contains rclone's C library, which is built separately; see "librclone" in the app's
-README (`scripts/build-librclone.sh`).
+The app contains rclone's C library, which Gradle builds with Go (pinned in
+`librclone/GO_VERSION`; `scripts/install-go.sh` installs it) and packages itself. A release build
+needs that exact Go; a debug build without any Go works but can't open a cloud library. See
+"librclone" in the app's README.

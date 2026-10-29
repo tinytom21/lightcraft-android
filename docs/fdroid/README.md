@@ -14,6 +14,11 @@ The store listing (title, descriptions, changelogs, icon, screenshots) is in
 
 - **One Rust release** (`rust-toolchain.toml`), **one cargo-ndk** (4.1.2) and **one NDK**
   (29.0.14206865) everywhere: CI, F-Droid and your machine.
+- **One Go release** for librclone (`apps/lightcraft-android/librclone/GO_VERSION`, with the sha256
+  of its download), installed by `scripts/install-go.sh` in CI and in F-Droid's prebuild (Debian's
+  Go is too old for rclone); rclone itself is pinned by `go.mod` and `go.sum`. Gradle builds it
+  into `build/` (F-Droid's scanner rejects binaries in the source tree), with `-trimpath` and no
+  build id, so the checkout path leaves no trace in it either.
 - **No build paths in the Rust library**: the Gradle task that runs cargo-ndk remaps the checkout
   and the Cargo home (`--remap-path-prefix`), so where it was built leaves no trace.
 - **No AGP extras that differ**: no VCS info and no dependency metadata block in the APK
