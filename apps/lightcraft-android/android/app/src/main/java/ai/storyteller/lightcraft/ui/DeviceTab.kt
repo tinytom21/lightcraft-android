@@ -105,7 +105,7 @@ fun HomeNav(tab: String, onTab: (String) -> Unit, modifier: Modifier = Modifier)
     val width = if (config.screenWidthDp > config.screenHeightDp) 168.dp else 175.1.dp
     Row(modifier.fillMaxWidth().background(Lc.bar).height(64.2.dp), horizontalArrangement = Arrangement.Center) {
         HomeTab(LcIcon.DevicePhotos, "Gallery", tab == "device", width) { onTab("device") }
-        HomeTab(LcIcon.Library, "LightCraft", tab == "library", width) { onTab("library") }
+        HomeTab(LcIcon.Library, "LightCraft Cloud", tab == "library", width) { onTab("library") }
     }
 }
 
@@ -237,7 +237,7 @@ fun DeviceFilterSheet(vm: AppViewModel, onDismiss: () -> Unit) {
 @Composable
 fun DeviceImportSheet(onDismiss: () -> Unit, onLibrary: () -> Unit, onAlbum: () -> Unit) {
     LcSheet(onDismiss) {
-        SheetRow(LcIcon.Import, "Import into LightCraft") {
+        SheetRow(LcIcon.Import, "Import into LightCraft Cloud") {
             onDismiss()
             onLibrary()
         }
@@ -337,7 +337,7 @@ private fun FolderList(vm: AppViewModel, pickers: GalleryPickers, onMoreAccess: 
         if (vm.deviceAccess == DeviceAccess.PARTIAL) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "partial") {
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("LightCraft sees only the photos you picked.", color = Lc.textDim, fontFamily = Inter, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text("LightCraft Cloud sees only the photos you picked.", color = Lc.textDim, fontFamily = Inter, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     Text(
                         "Change",
                         color = Lc.selected,
@@ -411,7 +411,7 @@ fun DuplicateDialog(vm: AppViewModel) {
     AlertDialog(
         onDismissRequest = { q.answer(null) },
         containerColor = Lc.dialog,
-        title = { Text(if (n == 1) "This photo is in LightCraft already" else "These $n photos are in LightCraft already", fontFamily = Inter, color = Lc.text, fontSize = 18.sp) },
+        title = { Text(if (n == 1) "This photo is in LightCraft Cloud already" else "These $n photos are in LightCraft Cloud already", fontFamily = Inter, color = Lc.text, fontSize = 18.sp) },
         text = {
             LazyVerticalGrid(GridCells.Adaptive(64.dp), Modifier.heightIn(max = 260.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(q.photos, key = { it.id }) { p ->
@@ -547,7 +547,7 @@ fun DeviceGallery(vm: AppViewModel, list: LazyListState, denied: Boolean, onAllo
     if (vm.deviceAccess == DeviceAccess.NONE) {
         DeviceEmpty(
             "No access to photos",
-            "LightCraft needs access to the photos on your phone to edit them.",
+            "LightCraft Cloud needs access to the photos on your phone to edit them.",
             if (denied) "Change permissions" to onSettings else "Allow" to onAllow,
             big = true,
         )
@@ -559,7 +559,7 @@ fun DeviceGallery(vm: AppViewModel, list: LazyListState, denied: Boolean, onAllo
         vm.devicePhotos.isNotEmpty() && vm.deviceFiltered -> DeviceEmpty("Nothing matches", "Try another filter.", "Clear filter" to { vm.clearDeviceFilter() })
         vm.deviceAccess == DeviceAccess.PARTIAL -> DeviceEmpty(
             "No photos found",
-            "This folder is empty, or LightCraft can see only a few of your photos.",
+            "This folder is empty, or LightCraft Cloud can see only a few of your photos.",
             "Change permissions" to onSettings,
             second = "Select photos" to onAllow,
         )

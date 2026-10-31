@@ -1,6 +1,6 @@
 An Android native open-source photo editor and raw developer written in Rust.
 
-LightCraft is a photo editor and raw developer for Android, built on the LightCraft engine. It follows the layout and the tools of Lightroom mobile, and everything stays on your phone: no account, no cloud, no internet access.
+LightCraft Cloud is a photo editor and raw developer for Android, an independent project built on LightCraft for Android and the LightCraft engine. It follows the layout and the tools of Lightroom mobile. It shows the photo library your computer publishes to your own cloud storage (set up with the desktop app, https://github.com/tinytom21/lightcraft-cloud), and edits stay on your phone and your storage: no account with us, nothing sent anywhere else.
 
 Edit
 * Light: exposure, contrast, highlights, shadows, whites, blacks, and a point or parametric tone curve (also drawn right on the photo)
@@ -23,6 +23,6 @@ Library
 Save and share
 * JPG, TIF, AVIF, DNG for raws, or the original; full or custom size, quality, sharpening, colour space, metadata, watermark (text or graphic) and border
 
-Works upright and sideways. LightCraft is in beta.
+Works upright and sideways. LightCraft Cloud is in beta.
 
-LightCraft is not affiliated with or endorsed by Adobe. Lightroom is a trademark of Adobe Inc.
+LightCraft Cloud is not affiliated with or endorsed by Adobe. Lightroom is a trademark of Adobe Inc.

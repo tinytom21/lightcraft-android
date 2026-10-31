@@ -1137,7 +1137,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun chooseLibraryFolder(uri: Uri): Boolean {
         val path = LibraryFolder.pathOf(getApplication(), uri)
         if (path == null) {
-            say("LightCraft can only use a folder on the phone's storage or an SD card")
+            say("LightCraft Cloud can only use a folder on the phone's storage or an SD card")
             return false
         }
         if (folderLibrary.enabled) startFolderLibrary(path) else saveFolderLibrary(FolderLibrary(false, path, 0L, null, folderLibrary.writesXmp))
@@ -1160,7 +1160,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun startFolderLibrary(folder: String) {
         viewModelScope.launch {
             val e = lightcraft.engine.await().getOrNull() ?: return@launch
-            if (!LibraryFolder.allowed()) return@launch say("LightCraft needs All files access to edit photos in place")
+            if (!LibraryFolder.allowed()) return@launch say("LightCraft Cloud needs All files access to edit photos in place")
             importing = true
             val result = runCatching {
                 e.command {
@@ -1208,7 +1208,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val e = lightcraft.engine.await().getOrNull() ?: return@launch
             if (!LibraryFolder.allowed()) {
-                if (manual) say("LightCraft needs All files access to read the folder")
+                if (manual) say("LightCraft Cloud needs All files access to read the folder")
                 return@launch
             }
             folderSyncing = true
@@ -1510,7 +1510,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val added = report.imported.firstOrNull()
             val id = added ?: report.existing.firstOrNull()
             if (id == null) {
-                say("Can't open ${p.name}: ${report.failed.firstOrNull() ?: "LightCraft can't read it"}")
+                say("Can't open ${p.name}: ${report.failed.firstOrNull() ?: "LightCraft Cloud can't read it"}")
                 return@launch
             }
             refreshPhotos()

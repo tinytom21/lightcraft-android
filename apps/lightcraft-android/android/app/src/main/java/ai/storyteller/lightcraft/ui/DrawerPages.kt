@@ -282,7 +282,7 @@ private fun FolderLibraryPage(vm: AppViewModel, onBack: () -> Unit) {
         PageGroup {
             PageSwitch(
                 "Edit photos in place in a folder",
-                "Photos stay in the folder and LightCraft saves its edits in XMP sidecars next to them, where other apps and sync tools see them. " +
+                "Photos stay in the folder and LightCraft Cloud saves its edits in XMP sidecars next to them, where other apps and sync tools see them. " +
                     "Turning it off keeps the photos in the library and deletes nothing.",
                 f.enabled || turningOn,
             ) { on ->
@@ -310,10 +310,10 @@ private fun FolderLibraryPage(vm: AppViewModel, onBack: () -> Unit) {
             if (f.enabled) PageRow("Synchronize folder", if (vm.folderSyncing) "Working…" else null) { vm.syncFolder(manual = true) }
         }
         val note = when {
-            f.enabled && !allowed -> "LightCraft no longer has All files access, so the folder isn't read. Turn it back on in the system's settings."
+            f.enabled && !allowed -> "LightCraft Cloud no longer has All files access, so the folder isn't read. Turn it back on in the system's settings."
             f.enabled && f.syncedAt > 0L -> "Synchronized ${DateUtils.getRelativeTimeSpanString(f.syncedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}: ${f.result.orEmpty()}"
             f.enabled -> f.result
-            else -> "Synchronizing adds the folder's new photos and reads edits other apps saved to sidecars. It runs whenever LightCraft opens."
+            else -> "Synchronizing adds the folder's new photos and reads edits other apps saved to sidecars. It runs whenever LightCraft Cloud opens."
         }
         note?.let {
             Text(it, color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(horizontal = 26.3.dp, vertical = 10.dp).widthIn(max = 474.dp))
@@ -458,7 +458,7 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
     st.lastError?.let { PageNote("Last error: $it", pageError) }
     // (an automatic refresh that failed said nothing at the time)
     vm.cloudAutoError?.takeIf { it != st.lastError }?.let { PageNote("Last refresh failed: $it", pageError) }
-    if (!st.connected) PageNote("The cloud library couldn't be reached when LightCraft started. Refresh now tries again; Disconnect lets you set it up again.", pageError)
+    if (!st.connected) PageNote("The cloud library couldn't be reached when LightCraft Cloud started. Refresh now tries again; Disconnect lets you set it up again.", pageError)
     PageGroup {
         PageHeading("Preview cache size")
         cacheChoices.forEach { g ->
@@ -480,7 +480,7 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
             title = { Text("Disconnect?", fontFamily = Inter, color = Lc.text) },
             text = {
                 Text(
-                    "LightCraft stops syncing with the cloud library. The photos, their thumbnails, the downloaded previews and your edits stay on the phone, but edits not sent yet won't be sent (Refresh now first, to send them). Nothing on the cloud storage changes.",
+                    "LightCraft Cloud stops syncing with the cloud library. The photos, their thumbnails, the downloaded previews and your edits stay on the phone, but edits not sent yet won't be sent (Refresh now first, to send them). Nothing on the cloud storage changes.",
                     fontFamily = Inter, color = Lc.text, fontSize = 14.sp,
                 )
             },
@@ -612,7 +612,7 @@ fun StoragePage(vm: AppViewModel, onBack: () -> Unit) {
                 Text("Details", color = pageText, fontFamily = Inter, fontSize = 15.sp)
             }
             if (details && s != null) {
-                DetailRow(Lc.highlight, "LightCraft's library (${s.photos} photos)", gb(s.libraryBytes))
+                DetailRow(Lc.highlight, "LightCraft Cloud's library (${s.photos} photos)", gb(s.libraryBytes))
                 DetailRow(Lc.textDim, "Everything else", gb((s.deviceTotal - s.deviceFree - s.libraryBytes).coerceAtLeast(0L)))
                 DetailRow(Lc.divider, "Free", gb(s.deviceFree))
                 Spacer(Modifier.height(12.dp))
@@ -642,20 +642,22 @@ fun AboutPage(vm: AppViewModel, onBack: () -> Unit) {
     var text by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { text = vm.about() }
     val uri = LocalUriHandler.current
-    DrawerPage("About LightCraft", onBack) {
+    val context = LocalContext.current
+    val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: engineVersion() }
+    DrawerPage("About LightCraft Cloud", onBack) {
         Column(Modifier.padding(horizontal = 28.7.dp).widthIn(max = 468.dp).fillMaxWidth()) {
             Spacer(Modifier.height(23.8.dp))
             Row(Modifier.fillMaxWidth()) {
-                Text("LIGHTCRAFT ANDROID", color = pageText, fontFamily = Inter, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Text("v${engineVersion()}", color = pageText, fontFamily = Inter, fontSize = 13.sp)
+                Text("LIGHTCRAFT CLOUD", color = pageText, fontFamily = Inter, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("v$appVersion", color = pageText, fontFamily = Inter, fontSize = 13.sp)
             }
             Spacer(Modifier.height(16.dp))
-            Text("Open source under the MIT or Apache-2.0 licence. Your photos stay on this phone: LightCraft sends nothing anywhere.", color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp)
+            Text("Open source under the MIT or Apache-2.0 licence. It is an independent project built on LightCraft for Android. Your photos stay on this phone; the only thing it talks to is the cloud storage you connect.", color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp)
             Spacer(Modifier.height(16.dp))
             Text(text, color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp)
-            AboutLink("SOURCE CODE", HELP_URL) { runCatching { uri.openUri(HELP_URL) } }
-            AboutLink("THIRD-PARTY LICENCES", "$HELP_URL/blob/main/apps/lightcraft-android/README.md") {
-                runCatching { uri.openUri("$HELP_URL/blob/main/apps/lightcraft-android/README.md") }
+            AboutLink("SOURCE CODE", SOURCE_URL) { runCatching { uri.openUri(SOURCE_URL) } }
+            AboutLink("THIRD-PARTY LICENCES", "$SOURCE_URL/blob/HEAD/apps/lightcraft-android/README.md") {
+                runCatching { uri.openUri("$SOURCE_URL/blob/HEAD/apps/lightcraft-android/README.md") }
             }
         }
     }
