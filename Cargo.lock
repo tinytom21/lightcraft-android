@@ -2184,6 +2184,7 @@ dependencies = [
 [[package]]
 name = "lightcraft-cloud-client"
 version = "0.1.0"
+source = "git+https://github.com/tinytom21/lightcraft-cloud?rev=c87e2dcc273e515ec884573dec14a6a789c135e1#c87e2dcc273e515ec884573dec14a6a789c135e1"
 dependencies = [
  "libloading",
  "log",
