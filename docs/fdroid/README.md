@@ -1,14 +1,9 @@
-# F-Droid
+# Reproducible builds (F-Droid)
 
-LightCraft for Android is built for F-Droid as a **reproducible build**: F-Droid's build server
-builds each tagged release from source and checks it is byte-for-byte the APK on GitHub Releases,
-then ships ours (signed with our key), so people can move between F-Droid and GitHub builds without
-reinstalling.
-
-`io.github.artcraftandroid.lightcraft.yml` is the recipe for
-[fdroiddata](https://gitlab.com/fdroid/fdroiddata) (`metadata/io.github.artcraftandroid.lightcraft.yml`).
-The store listing (title, descriptions, changelogs, icon, screenshots) is in
-`fastlane/metadata/android/en-US/` at the repository root; F-Droid reads it from there.
+LightCraft Cloud is not on F-Droid and has no F-Droid recipe: the one upstream's fork had named
+upstream's application id, repository and signing key, so it was removed here. The build is still
+set up to be reproducible, as upstream's is, so a recipe could be added later.
+The store listing text (title, descriptions, changelogs) is in `fastlane/metadata/android/en-US/`.
 
 ## What makes the build reproducible
 
@@ -38,17 +33,3 @@ a local checkout don't matter.
    at most 500 characters).
 3. Commit, tag `v<version>` and push the tag; the workflow refuses a tag that isn't the version in
    gradle.properties. Publish the draft release it makes.
-4. F-Droid's update check finds the tag and adds the builds itself (`AutoUpdateMode: Version`).
-
-## Submitting (once)
-
-1. Fork fdroiddata on GitLab, branch `io.github.artcraftandroid.lightcraft`.
-2. Copy the recipe to `metadata/io.github.artcraftandroid.lightcraft.yml` and replace
-   `TAG_COMMIT_SHA` with the full 40-character commit of the release tag.
-3. Run `fdroid lint io.github.artcraftandroid.lightcraft` and `fdroid rewritemeta
-   io.github.artcraftandroid.lightcraft` (both must change nothing), commit as
-   `New App: io.github.artcraftandroid.lightcraft`, push and open the merge request with the
-   "App inclusion" template.
-
-The release key's certificate SHA-256 (`AllowedAPKSigningKeys`):
-`7356d58ae3446b3e6cc457d0b9901700376c787310c9dba14e9c11866588eeb5`.

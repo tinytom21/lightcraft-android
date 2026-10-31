@@ -213,7 +213,7 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "io.github.artcraftandroid.lightcraft"
+        applicationId = "io.github.tinytom21.lightcraftcloud"
         minSdk = minApi
         targetSdk = 36
         versionCode = appVersionCode
