@@ -1,7 +1,10 @@
 use super::*;
 
 fn temp_dir(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("lc-mobile-{tag}-{}", std::process::id()));
+    // read once: connecting the cloud library points TMPDIR at its work folder (for librclone's Go runtime),
+    // which would otherwise move the folders of tests running alongside it
+    static BASE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    let d = BASE.get_or_init(std::env::temp_dir).join(format!("lc-mobile-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
