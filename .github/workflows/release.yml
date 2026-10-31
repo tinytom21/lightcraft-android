@@ -1,4 +1,4 @@
-# Release pipeline: pushing a version tag (v0.0.1-beta, v0.2.0, v1.0.0-rc.1, …) builds the APKs
+# Release pipeline of LightCraft Cloud: pushing a version tag (v0.0.1-beta, v0.2.0, v1.0.0-rc.1, …) builds the APKs
 # (one for 64-bit ARM phones, one for 32-bit ARM ones) signed with the release key and makes them a
 # draft GitHub release named after the tag, with an empty "What's Changed" section. Fill that in on
 # GitHub and publish the draft: it becomes the latest release (betas too: while the app is in beta,
@@ -97,8 +97,8 @@ jobs:
           fi
 
       # one APK per ABI (each about half the size of one holding both): 64-bit ARM for most
-      # phones (lightcraft-android-<version>.apk), 32-bit ARM for older and low-end ones
-      # (lightcraft-android-<version>-armeabi-v7a.apk)
+      # phones (lightcraft-cloud-<version>.apk), 32-bit ARM for older and low-end ones
+      # (lightcraft-cloud-<version>-armeabi-v7a.apk)
       - name: Build
         working-directory: apps/lightcraft-android/android
         env:
@@ -111,7 +111,7 @@ jobs:
           for abi in arm64-v8a armeabi-v7a; do
             ./gradlew assembleRelease "-Plightcraft.abis=$abi" "-Plightcraft.version=$VERSION" --no-daemon
             suffix=""; [ "$abi" = arm64-v8a ] || suffix="-$abi"
-            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/lightcraft-android-$VERSION$suffix.apk"
+            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/lightcraft-cloud-$VERSION$suffix.apk"
           done
 
       - name: APK

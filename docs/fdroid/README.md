@@ -28,8 +28,7 @@ a local checkout don't matter.
 
 1. Set `lightcraft.version` and `lightcraft.versionCode` in
    `apps/lightcraft-android/android/gradle.properties` (the build checks they agree: the code is
-   `((major·100 + minor)·100 + patch)·100 + (pre-release number, or 99)`, e.g. 0.0.3-beta → 301).
-2. Add `fastlane/metadata/android/en-US/changelogs/<code>1.txt` and `<code>2.txt` (one per APK,
-   at most 500 characters).
-3. Commit, tag `v<version>` and push the tag; the workflow refuses a tag that isn't the version in
+   `((major·100 + minor)·100 + patch)·100 + (pre-release number, or 99)`, e.g. 0.1.0 → 10099,
+   0.1.0-beta → 10001).
+2. Commit, tag `v<version>` and push the tag; the workflow refuses a tag that isn't the version in
    gradle.properties. Publish the draft release it makes.
