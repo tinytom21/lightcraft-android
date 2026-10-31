@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon's foreground: LightCraft's tile (copied in by the build as drawable/ic_launcher_tile)
+     with the cloud badge of LightCraft Cloud at its lower right, both inset to the 72 dp a launcher shows. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <inset
+            android:drawable="@drawable/ic_launcher_tile"
+            android:inset="18dp" />
+    </item>
+    <item>
+        <inset
+            android:drawable="@drawable/ic_cloud_badge"
+            android:inset="18dp" />
+    </item>
+</layer-list>
