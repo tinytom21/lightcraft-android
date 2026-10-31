@@ -66,7 +66,7 @@ The cloud library reaches a PC's published photos through rclone's C library. Gr
   (`-Plightcraft.go=<root>`, `GO_ROOT`, the pinned one if installed, PATH, `~/.local/go`), and
   without Go it warns and builds without librclone (opening a cloud library then fails with
   "librclone.so not found").
-- **Host library** for `cargo test -p lightcraft-cloud-client`: `scripts/build-librclone.sh host`
+- **Host library** for the tests of lightcraft-cloud-client (in the lightcraft-cloud repo, `LIBRCLONE=<this path>/librclone-host/librclone.so`): `scripts/build-librclone.sh host`
   (lands in the gitignored `librclone-host/`). Other ABIs by hand:
   `scripts/build-librclone.sh -o DIR arm64-v8a x86_64`.
 

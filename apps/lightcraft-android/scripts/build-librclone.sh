@@ -2,7 +2,7 @@
 # Builds librclone.so (rclone's C library, https://rclone.org/) for the cloud library, from the Go
 # module in librclone/ (go.mod and go.sum pin rclone, GO_VERSION pins Go):
 #   - the Android ABIs, into <out>/<abi>/librclone.so (Gradle runs this and packages the result)
-#   - the host (linux/amd64), into librclone-host/ (for `cargo test` of lightcraft-cloud-client)
+#   - the host (linux/amd64), into librclone-host/ (for the tests of lightcraft-cloud-client, via LIBRCLONE)
 # Needs the pinned Go (scripts/install-go.sh installs it; else $GO_ROOT/bin, PATH, ~/.local/go) and,
 # for Android, the NDK ($ANDROID_NDK_HOME, else $ANDROID_HOME/ndk/29.0.14206865, else the newest).
 #

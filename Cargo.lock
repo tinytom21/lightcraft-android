@@ -2183,12 +2183,9 @@ dependencies = [
 
 [[package]]
 name = "lightcraft-cloud-client"
-version = "0.14.0"
+version = "0.1.0"
 dependencies = [
  "libloading",
- "lightcraft-engine",
- "lightcraft-meta",
- "lightcraft-scenes",
  "log",
  "serde",
  "serde_json",
