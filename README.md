@@ -1,18 +1,51 @@
 <p align="center">
-  <img src="assets/app-icon/lightcraft-1024.png" alt="LightCraft's app icon" width="128">
+  <img src="fastlane/metadata/android/en-US/images/icon.png" alt="LightCraft Cloud's app icon: LightCraft's lynx with a small cloud badge" width="128">
 </p>
 
-<h1 align="center">LightCraft for Android</h1>
+<h1 align="center">LightCraft Cloud</h1>
 
 <p align="center">
-  <b>An Android native open-source, non-destructive photo editor and raw developer written in Rust, built on the same engine as the desktop app, <a href="https://github.com/storytold/lightcraft">LightCraft</a>, with a Kotlin/Jetpack Compose UI.</b><br>
-  Many credits to the original maintainers, <a href="https://github.com/storytold">storytold</a>.
+  <b>A phone app that shows the photo library your PC publishes to your own cloud storage, and lets you edit it on the phone.</b>
 </p>
 
+LightCraft Cloud is an independent project built on [LightCraft for Android](https://github.com/artcraft-android/lightcraft-android), the
+Rust and Jetpack Compose photo editor and raw developer, which is itself built on the engine of the desktop app
+[LightCraft](https://github.com/storytold/lightcraft). Many credits to those projects and their maintainers. It installs beside the
+original app (its own application id, `io.github.tinytom21.lightcraftcloud`).
+
+## What you need
+
+- The desktop app **[lightcraft-cloud](https://github.com/tinytom21/lightcraft-cloud)** on your PC. It publishes a photo folder to
+  cloud storage (any [rclone](https://rclone.org) backend: Google Drive, OneDrive, S3, WebDAV, SFTP...) and applies the edits the phone
+  sends back. The PC stays the master copy; the phone holds thumbnails and small previews, not the originals.
+- An Android 10 or newer phone.
+
+## Install
+
+Download the APK from [Releases](https://github.com/tinytom21/lightcraft-android/releases): `lightcraft-cloud-<version>.apk` for most
+phones, the `-armeabi-v7a` one for 32-bit ARM phones. Open it on the phone and allow installing from that source when Android asks.
+
+## Connect to your library
+
+For now the connection is a config file: export a phone-only rclone remote on the PC to a file, copy it to the phone, then pick the
+file, the remote and a name for the phone in the app's Preferences. [Cloud library](apps/lightcraft-android/docs/cloud-library.md)
+walks through it step by step, including how to limit the remote to the library folder.
+
+## Licence and credits
+
+[MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE), at your option, as upstream's. Copyright notices and the third-party licences are
+kept in [NOTICE](NOTICE) and `assets/ATTRIBUTION.md`. Not affiliated with Adobe; Lightroom is a trademark of Adobe Inc.
+
+Below is upstream's README for the app, which this one is built on.
+
+<br>
+
+---
+
+<h2 align="center">LightCraft for Android</h2>
+
 <p align="center">
-  <a href="https://github.com/artcraft-android/lightcraft-android/releases"><img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" alt="Get it on GitHub" height="60"></a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/artcraft-android/lightcraft-android"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="60"></a>
-  <br><sub>Each release has two APKs: the plain one for most phones, the <code>-armeabi-v7a</code> one for 32-bit ARM phones.</sub>
+  <b>An Android native open-source, non-destructive photo editor and raw developer written in Rust, built on the same engine as the desktop app, <a href="https://github.com/storytold/lightcraft">LightCraft</a>, with a Kotlin/Jetpack Compose UI.</b>
 </p>
 
 <p align="center">
@@ -128,7 +161,7 @@
 <p align="center">
   <img src="docs/images/architecture.png" alt="Architecture diagram: the photographer uses the Android app (App navigation, which shows the Photo editor and the Photo library and uses the App state, which calls the Session bridge); the editor adjusts Develop controls, selects Presets and profiles and configures Masking, offers Denoise and HDR and panorama, and exports; the Session bridge opens the Mobile Rust API, which uses Photo sources and the Catalog and search the library browses; Photo sources read Photo metadata, render with the Develop pipeline (which produces the Export) and decode with the Image codecs" width="700">
   <br>
-  <sub>How the app and the engine fit together. Generated with <a href="https://gitdiagram.com/artcraft-android/lightcraft-android">GitDiagram</a>.</sub>
+  <sub>How the app and the engine fit together. Generated with <a href="https://gitdiagram.com/tinytom21/lightcraft-android">GitDiagram</a>.</sub>
 </p>
 
 <br>
@@ -149,7 +182,8 @@ LightCraft for Android is in beta.
 | Save or share: JPG, TIF, AVIF (DNG for raws) or the original; small, full or custom size; quality, naming, sharpening, colour space, metadata, watermark and border | ✅ |
 | Upright and sideways layouts | ✅ |
 | Lens blur | ⬜ (the engine doesn't render it yet) |
-| Community, cloud sync | 🚫 LightCraft is a local app |
+| Community | 🚫 not planned |
+| Cloud library (LightCraft Cloud) | ✅ see [Cloud library](apps/lightcraft-android/docs/cloud-library.md) |
 
 <sub>✅ works today · 🚧 in progress · ⬜ not started · 🚫 not planned</sub>
 
