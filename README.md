@@ -18,6 +18,9 @@ original app (its own application id, `io.github.tinytom21.lightcraftcloud`).
 - The desktop app **[lightcraft-cloud](https://github.com/tinytom21/lightcraft-cloud)** on your PC. It publishes a photo folder to
   cloud storage (any [rclone](https://rclone.org) backend: Google Drive, OneDrive, S3, WebDAV, SFTP...) and applies the edits the phone
   sends back. The PC stays the master copy; the phone holds thumbnails and small previews, not the originals.
+- The whole project, with a diagram of how the parts fit, is explained at
+  [github.com/tinytom21/lightcraft-cloud](https://github.com/tinytom21/lightcraft-cloud). The PC with your master library is the
+  home PC; other PCs keep a copy of the folders you choose.
 - An Android 10 or newer phone.
 
 ## Install
