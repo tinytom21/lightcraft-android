@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The launcher icon's foreground: LightCraft's tile (copied in by the build as drawable/ic_launcher_tile)
-     with the cloud badge of LightCraft Cloud at its lower right, both inset to the 72 dp a launcher shows. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+     with the cloud badge of LightCraft Cloud at its lower right, both inset to the 72 dp a launcher shows.
+     paddingMode="stack" matters: the default nests each layer inside the padding of the one below, which
+     would add the tile's inset to the badge's and draw the badge at half size, towards the middle. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:paddingMode="stack">
     <item>
         <inset
             android:drawable="@drawable/ic_launcher_tile"
