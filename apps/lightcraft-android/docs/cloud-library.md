@@ -1,7 +1,7 @@
 # Cloud library on the phone
 
-A PC publishes a photo folder to cloud storage with `lc-cloud sync`
-([lc-cloud](https://github.com/tinytom21/lightcraft-cloud); the remote layout is in its
+A PC publishes a photo folder to cloud storage with the
+[LightCraft Cloud](https://github.com/tinytom21/lightcraft-cloud) desktop app (the remote layout is in its
 [FORMAT.md](https://github.com/tinytom21/lightcraft-cloud/blob/main/FORMAT.md)). The phone then shows the photos
 as thumbnails, downloads a small smart preview of each photo you open, lets you edit it, and sends
 the edit back to the PC, which stays the master copy. The phone never holds the originals unless you
