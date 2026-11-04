@@ -3,8 +3,10 @@ package ai.storyteller.lightcraft
 import ai.storyteller.lightcraft.ui.AppViewModel
 import ai.storyteller.lightcraft.ui.LightcraftRoot
 import ai.storyteller.lightcraft.ui.LightcraftTheme
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -38,6 +40,12 @@ class MainActivity : ComponentActivity() {
         if (taken && file.length() > 0) vm.importShot(file) else file.delete()
     }
 
+    // The manifest declares CAMERA (for the pairing page's QR scanner), and an app that declares it must hold it
+    // to start the camera app too, so the camera button asks first
+    private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchCamera() else vm.tell("Allow the camera to take a photo from LightCraft Cloud.")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // always dark, whatever the system theme: light status icons on the dark bars
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
@@ -64,6 +72,10 @@ class MainActivity : ComponentActivity() {
 
     /** The phone's camera app, for a photo that goes straight into the library. */
     private fun openCamera() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) launchCamera() else askCamera.launch(Manifest.permission.CAMERA)
+    }
+
+    private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }
         val file = File(dir, "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg")
         shot = file
