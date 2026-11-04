@@ -33,7 +33,7 @@ lightcraft-catalog = { path = "crates/catalog" }
 lightcraft-preview = { path = "crates/preview" }
 lightcraft-merge = { path = "crates/merge" }
 lightcraft-engine = { path = "crates/engine" }
-lightcraft-cloud-client = { git = "https://github.com/tinytom21/lightcraft-cloud", rev = "c87e2dcc273e515ec884573dec14a6a789c135e1" }
+lightcraft-cloud-client = { path = "../lightcraft-cloud/crates/sync" }
 lightcraft-fetch = { path = "crates/fetch" }
 lightcraft-heif = { path = "crates/heif" }
 lightcraft-segment = { path = "crates/segment" }
