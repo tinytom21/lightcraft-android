@@ -3,6 +3,9 @@ package ai.storyteller.lightcraft.ui
 import ai.storyteller.lightcraft.core.CloudStatus
 import ai.storyteller.lightcraft.core.engineVersion
 import ai.storyteller.lightcraft.engine.CloudConfig
+import ai.storyteller.lightcraft.engine.DeviceAccess
+import ai.storyteller.lightcraft.engine.DeviceMedia
+import ai.storyteller.lightcraft.engine.UploadText
 import ai.storyteller.lightcraft.engine.LibraryFolder
 import android.content.Context
 import android.content.Intent
@@ -11,6 +14,7 @@ import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +77,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -569,6 +574,7 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
     // (an automatic refresh that failed said nothing at the time)
     vm.cloudAutoError?.takeIf { it != st.lastError }?.let { PageNote("Last refresh failed: $it", pageError) }
     if (!st.connected) PageNote("The cloud library couldn't be reached when LightCraft Cloud started. Refresh now tries again; Disconnect lets you set it up again.", pageError)
+    PhoneUploadSection(vm, st)
     PageGroup {
         PageHeading("Preview cache size")
         cacheChoices.forEach { g ->
@@ -600,6 +606,76 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", fontFamily = Inter, color = Lc.text) } },
         )
     }
+}
+
+/**
+ * Photos from this phone to the home PC (docs/cloud-library.md): "Send photos to PC" (the system photo picker, always there) and, off
+ * until the person turns it on, "Send new camera photos automatically" (the camera folder, photos taken from then on) with "Only on
+ * Wi-Fi". What is being sent, what was added and what was refused shows under them.
+ */
+@Composable
+private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
+    val context = LocalContext.current
+    var access by remember { mutableStateOf(DeviceMedia.access(context)) }
+    var asked by remember { mutableStateOf(false) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> if (uris.isNotEmpty()) vm.sendPhotosToPc(uris) }
+    val askAccess = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        access = DeviceMedia.access(context)
+        asked = true
+        if (access == DeviceAccess.NONE) {
+            // refused: the switch goes back off, and the page says why
+            vm.switchUploadAuto(false)
+            vm.tell("Allow LightCraft Cloud to read your photos to send the new camera photos. Nothing was turned on.")
+        } else {
+            vm.switchUploadAuto(true)
+        }
+    }
+    // back from the system's settings, where the person may have changed what the app can see
+    LifecycleResumeEffect(Unit) {
+        access = DeviceMedia.access(context)
+        onPauseOrDispose {}
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            vm.refreshUploads()
+            delay(1500)
+        }
+    }
+    PageGroup {
+        PageHeading("Send photos to the PC")
+        PageAction("Send photos to PC", enabled = st.connected) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+        PageSwitch(
+            "Send new camera photos automatically",
+            "Photos you take from now on in the camera folder go to the home PC by themselves, even when the app is closed. Photos already on the phone are not sent. Off until you turn it on.",
+            vm.uploadAuto,
+        ) { on ->
+            when {
+                !on -> vm.switchUploadAuto(false)
+                access == DeviceAccess.FULL -> vm.switchUploadAuto(true)
+                else -> askAccess.launch(DeviceMedia.permissions())
+            }
+        }
+        if (vm.uploadAuto) PageSwitch("Only on Wi-Fi", "Waits for a network that is not metered. Photos you pick yourself are sent on any network.", vm.uploadWifiOnly) { vm.switchUploadWifiOnly(it) }
+    }
+    if (vm.uploadAuto && access != DeviceAccess.FULL) {
+        PageNote(
+            if (access == DeviceAccess.PARTIAL) "LightCraft Cloud can only see the photos you selected, so it cannot see new camera photos. In the system settings, allow it to read all photos."
+            else "LightCraft Cloud may not read your photos any more, so it cannot see new camera photos. In the system settings, allow it to read photos.",
+            pageError,
+        )
+        PageGroup {
+            PageAction("Open the app's settings") {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+    }
+    val u = vm.uploads
+    if (u != null) {
+        val lines = UploadText.lines(u)
+        lines.forEach { line -> PageNote(line, if (" was not added by the home PC: " in line) pageError else pageNote) }
+        if (UploadText.finished(u)) PageGroup { PageAction("Dismiss") { vm.clearUploadReport() } }
+    }
+    PageNote("Photos stay on the phone: nothing is deleted from your gallery. HEIC photos are not sent yet.")
 }
 
 /** "5 minutes ago" for a UTC time like `2026-10-27T09:42:15Z`; null when there is none or it can't be read. */

@@ -70,7 +70,7 @@ The cloud library reaches a PC's published photos through rclone's C library. Gr
   (lands in the gitignored `librclone-host/`). Other ABIs by hand:
   `scripts/build-librclone.sh -o DIR arm64-v8a x86_64`.
 
-The phone is connected by pairing: scan the QR code of the PC's Add a device window and type its code (an rclone config file is the fallback). See [docs/cloud-library.md](docs/cloud-library.md).
+The phone is connected by pairing: scan the QR code of the PC's Add a device window and type its code (an rclone config file is the fallback). The phone can also send photos to the home PC (picked with the photo picker, or the new camera photos automatically; off by default): see "Send photos to the PC" in [docs/cloud-library.md](docs/cloud-library.md).
 
 ## How it works
 

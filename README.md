@@ -186,7 +186,7 @@ LightCraft for Android is in beta.
 | Upright and sideways layouts | ✅ |
 | Lens blur | ⬜ (the engine doesn't render it yet) |
 | Community | 🚫 not planned |
-| Cloud library (LightCraft Cloud) | ✅ see [Cloud library](apps/lightcraft-android/docs/cloud-library.md) |
+| Cloud library (LightCraft Cloud), including sending photos to the home PC | ✅ see [Cloud library](apps/lightcraft-android/docs/cloud-library.md) |
 
 <sub>✅ works today · 🚧 in progress · ⬜ not started · 🚫 not planned</sub>
 

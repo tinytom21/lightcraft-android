@@ -93,8 +93,8 @@ Copy that section from the config file instead, and pick the crypt remote in the
 
 ### What the file lets the phone do
 
-The phone writes only to `inbox/<its name>/`, as new files that are never overwritten; the PC
-validates every one before applying it. It reads thumbnails, previews, the manifest and, for a
+The phone writes only to `inbox/<its name>/` (edits) and `imports/<its name>/` (photos it sends, see
+"Send photos to the PC"), as new files that are never overwritten; the PC validates every one before applying it. It reads thumbnails, previews, the manifest and, for a
 full-size export, originals.
 
 **Security.** The file holds an OAuth token. For Google Drive that token carries the scope you picked
@@ -123,6 +123,45 @@ are deleted first and downloaded again when needed.
 
 Raw + JPEG pairs of one shot are one photo: the app lists the partner too, but hides it
 (`cloud_hidden_photos`).
+
+## Send photos to the PC
+
+The phone can send photos to the home PC, which adds them to its photo folder, publishes them, and so brings them back into this library
+like any other photo. It uses the same imports another PC uses (FORMAT.md in the LightCraft Cloud repository, "Imports"). On the Cloud
+library page, under **Send photos to the PC**:
+
+* **Send photos to PC** opens the system photo picker (photos only, several at once). It is always there. The picked photos are copied
+  into the app's queue and sent by a background job, so it goes on when you leave the app; photos you pick are sent on any network.
+* **Send new camera photos automatically** is **off** until you turn it on. When on, the photos taken from that moment in the camera
+  folder (`DCIM/Camera`) are queued by a background job that runs about every 15 minutes (never the photos already on the phone), and
+  sent. Turning it on asks to read your photos (Android 13 and later: "Photos and videos"; before that, storage) and nothing else; if you
+  refuse, the switch goes back off and the page says why. On Android 14 and later, if you chose "Select photos" the app cannot see new
+  photos: the page says so and has a button to the app's settings, where you allow all photos.
+* **Only on Wi-Fi** (on by default, under the automatic switch): the automatic job waits for a network that is not metered. The job also
+  waits for any network at all.
+
+**Where they go.** At the PC, into `Phone/<YYYY-MM-DD>` below its photo folder, the day the photo was taken (the camera's EXIF date, else
+the date the gallery has for it, else when it was modified; the day on the phone's clock). The file keeps its name; a name that is taken
+there is renamed `-2`, `-3`. The PC does it the next time it synchronizes, and the status line shows **N sent** when it has. A photo the
+library already has (the same bytes) is never queued ("already in your library, not sent").
+
+**What is sent.** JPEG, PNG, TIFF, DNG and the raw formats the PC adopts. **HEIC and HEIF are not sent**: LightCraft cannot read them yet,
+and the page says "N HEIC photos were not sent: LightCraft cannot read HEIC yet." WebP and other types are not sent either, and videos are
+never offered. Photos stay on the phone: **nothing is deleted from your gallery**. The app's own copy of a photo, kept until the PC has
+answered, is deleted then. A photo the PC refuses (its folder is on the PC's "leave out" list, say) is listed with the reason; pick it
+again to retry.
+
+**How it works.** The app copies each photo to a file in the cloud state folder (`uploads/staging`); the Rust library hashes it with
+LightCraft's own content hash, moves it into the queue (`uploads/<id>.photo` and `<id>.json`), and `cloud_upload_step` sends a few
+photos per call: the bytes to `imports/<phone>/<id>/<name>`, then the note `imports/<phone>/<id>.json` last. A file already on the storage
+at the right size is not sent again, so an upload cut off by a lost network, or by the app being killed, continues where it was. The PC's
+answer (`imports-done/<day>/<phone>/<id>.result.json`) says added, duplicate or rejected. The API: `cloud_upload_dir`,
+`cloud_enqueue_uploads`, `cloud_upload_step`, `cloud_upload_status`, `cloud_uploads_pending`, `cloud_clear_upload_report` (MobileSession),
+and `cloud_upload_kind` to ask if a name is sent. In Kotlin, `UploadWorker` (WorkManager) calls the step with a network constraint; the
+app also starts it when the page or the sync cycle finds photos waiting.
+
+The background jobs use WorkManager, which adds the permissions to receive the boot-completed broadcast, keep the CPU awake while it
+works and read the network state; the app still has no access to the network except through the storage you connect.
 
 ## Albums from the PC
 

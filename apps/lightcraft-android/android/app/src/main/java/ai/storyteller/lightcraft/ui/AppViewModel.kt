@@ -21,6 +21,7 @@ import ai.storyteller.lightcraft.core.PresetInfo
 import ai.storyteller.lightcraft.core.ProfileEntry
 import ai.storyteller.lightcraft.core.SpotInfo
 import ai.storyteller.lightcraft.core.ToneCurveInfo
+import ai.storyteller.lightcraft.core.UploadState
 import ai.storyteller.lightcraft.core.ViewGeometry
 import ai.storyteller.lightcraft.core.engineVersion
 import ai.storyteller.lightcraft.core.whiteBalanceModes
@@ -31,7 +32,10 @@ import ai.storyteller.lightcraft.engine.DeviceMedia
 import ai.storyteller.lightcraft.engine.DevicePhoto
 import ai.storyteller.lightcraft.engine.Engine
 import ai.storyteller.lightcraft.engine.LibraryFolder
+import ai.storyteller.lightcraft.engine.PhoneUploads
 import ai.storyteller.lightcraft.engine.PhotoFiles
+import ai.storyteller.lightcraft.engine.UploadScheduler
+import ai.storyteller.lightcraft.engine.UploadSettings
 import ai.storyteller.lightcraft.engine.toImageBitmap
 import android.app.Application
 import android.net.Uri
@@ -380,6 +384,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var cloudSyncedAt = 0L
     private var cloudPushJob: Job? = null
 
+    private val uploadSettings = UploadSettings(app)
+
+    /** "Send new camera photos automatically" (off by default) and its "Only on Wi-Fi" (on by default). */
+    var uploadAuto by mutableStateOf(uploadSettings.auto)
+        private set
+    var uploadWifiOnly by mutableStateOf(uploadSettings.wifiOnly)
+        private set
+
+    /** The photos sent to the home PC, as of the last [refreshUploads]; null before it is read. */
+    var uploads by mutableStateOf<UploadState?>(null)
+        private set
+
     /** A cloud library is set up (even when it could not load at launch: the page then shows why). */
     val cloudConfigured: Boolean get() = cloud?.let { it.connected || it.remote.isNotEmpty() } == true
 
@@ -639,6 +655,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     refreshPhotos()
                     refreshCloudStatus()
+                    UploadScheduler.applyAuto(getApplication(), uploadSettings)
                     cloudSync(manual = false)
                     runCatching { e.command { presets() to profiles() } }.onSuccess { (pr, pf) ->
                         presets = pr
@@ -1327,6 +1344,47 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Read the state of the photo uploads (cheap, no network). */
+    suspend fun refreshUploads() {
+        val e = engine ?: return
+        runCatching { withContext(Dispatchers.IO) { e.session.cloudUploadStatus() } }.onSuccess { uploads = it }
+    }
+
+    /** "Send photos to PC": copy the picked photos and queue them; a background job sends them (any network: the person asked for it now). */
+    fun sendPhotosToPc(uris: List<Uri>) {
+        val e = engine ?: return
+        viewModelScope.launch {
+            val queued = runCatching { withContext(Dispatchers.IO) { PhoneUploads.queuePicked(getApplication(), e.session, uris) } }
+            queued.onFailure { say("Couldn't queue the photos: ${it.message}") }
+            queued.onSuccess { r ->
+                r.failed.firstOrNull()?.let { say("${r.failed.size} photo${if (r.failed.size == 1) "" else "s"} couldn't be queued: $it") }
+                if (r.queued > 0u || r.alreadyQueued > 0u) UploadScheduler.send(getApplication())
+            }
+            refreshUploads()
+        }
+    }
+
+    fun clearUploadReport() {
+        val e = engine ?: return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { e.session.cloudClearUploadReport() } }
+            refreshUploads()
+        }
+    }
+
+    /** Switch the automatic sending of new camera photos on (from now) or off; the repeating background job follows. */
+    fun switchUploadAuto(on: Boolean) {
+        uploadSettings.setAuto(on)
+        uploadAuto = on
+        UploadScheduler.applyAuto(getApplication(), uploadSettings)
+    }
+
+    fun switchUploadWifiOnly(on: Boolean) {
+        uploadSettings.wifiOnly = on
+        uploadWifiOnly = on
+        UploadScheduler.applyAuto(getApplication(), uploadSettings)
+    }
+
     /** Back in the app: send the edits and fetch what changed, at most once every 15 seconds. */
     fun cloudSyncOnResume() = cloudSync(manual = false)
 
@@ -1348,6 +1406,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             val pushed = runCatching { withContext(Dispatchers.IO) { e.session.cloudPush() } }
+            // photos waiting to go to the home PC, or for its answer: the background job carries on (it keeps one already running)
+            runCatching { withContext(Dispatchers.IO) { e.session.cloudUploadsPending() } }.onSuccess { if (it > 0u) UploadScheduler.send(getApplication(), keep = true) }
             val refreshed = runCatching { withContext(Dispatchers.IO) { e.session.cloudRefresh() } }
             try {
                 refreshed.onSuccess { cloudRefreshed(it, manual) }
