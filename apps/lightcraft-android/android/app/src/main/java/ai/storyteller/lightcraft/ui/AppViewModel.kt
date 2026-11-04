@@ -1275,7 +1275,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Pair with the home PC: the pairing [text] (the QR code's) and its [code] open the connection details, which are
+     * Pair with the home PC: the pairing [text] (the QR code's) and the [code] this phone made and showed ([CloudConfig.newPairingCode]) open the connection details, which are
      * saved in the app's private config file, then it connects and fetches the photos like [connectCloud]. Argon2 takes
      * about a second, so it runs off the main thread. Neither the text nor the code is kept or logged here; the caller
      * drops them. [onDone] says whether it connected.

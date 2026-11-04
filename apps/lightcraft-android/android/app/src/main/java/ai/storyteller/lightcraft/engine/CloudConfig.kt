@@ -1,5 +1,6 @@
 package ai.storyteller.lightcraft.engine
 
+import ai.storyteller.lightcraft.core.cloudNewPairingCode
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -39,6 +40,12 @@ object CloudConfig {
         val cleaned = name.trim().replace(Regex("[^A-Za-z0-9._-]+"), "-").trimStart('.').take(64).trim('-')
         return cleaned.ifEmpty { "phone" }
     }
+
+    /**
+     * A new pairing code (`XXXX-XXXX-XXX`) for this phone. The pairing page shows it; the person types it into the home PC's Add
+     * a device window; the PC's QR code is locked with it. Make one per visit to the page and keep it in memory only.
+     */
+    fun newPairingCode(): String = cloudNewPairingCode()
 
     /** Whether [text] looks like a pairing text (what the PC's Add a device window shows): it starts with LCP1. */
     fun isPairingText(text: String): Boolean = text.trim().startsWith("LCP1") && text.trim().length > 4

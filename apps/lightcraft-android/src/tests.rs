@@ -909,12 +909,15 @@ fn pairing_refuses_a_wrong_code_and_connects_with_a_good_bundle() {
     let conf = base.join("private").join("phone-rclone.conf");
     let conf_s = conf.to_string_lossy().to_string();
     // (synthetic: a local folder remote needs no config text)
-    let (text, code) = seal(&Bundle::new(remote.to_string_lossy().to_string(), "# synthetic\n")).unwrap();
+    let code = crate::cloud_new_pairing_code();
+    assert_eq!(code.len(), 13);
+    let text = seal(&Bundle::new(remote.to_string_lossy().to_string(), "# synthetic\n"), &code).unwrap();
     let s = MobileSession::open(base.join("lib").to_string_lossy().to_string(), false).unwrap();
 
     // wrong code, not a pairing text, bad name: refused, nothing written, nothing leaked
-    let wrong = if code.starts_with('A') { "BBBBB-22222" } else { "AAAAA-22222" };
-    for (t, c, n) in [(&text, wrong, "pixel-9"), (&"hello".to_string(), code.as_str(), "pixel-9"), (&text, code.as_str(), "bad name!")] {
+    let other = crate::cloud_new_pairing_code();
+    let typo = format!("{}{}", &code[..12], if code.ends_with('0') { '1' } else { '0' });
+    for (t, c, n) in [(&text, other.as_str(), "pixel-9"), (&text, typo.as_str(), "pixel-9"), (&text, "ABC", "pixel-9"), (&"hello".to_string(), code.as_str(), "pixel-9"), (&text, code.as_str(), "bad name!")] {
         let e = s.cloud_pair(t.clone(), c.to_string(), n.into(), conf_s.clone()).unwrap_err().to_string();
         assert!(!e.contains(&text) && !e.contains(c) && !e.contains("synthetic"), "{e}");
         assert!(!conf.exists() && !s.cloud_status().connected);

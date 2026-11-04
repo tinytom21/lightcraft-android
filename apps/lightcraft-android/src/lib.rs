@@ -536,6 +536,14 @@ pub fn engine_version() -> String {
     env!("CARGO_PKG_VERSION").into()
 }
 
+/// A new pairing code (`XXXX-XXXX-XXX`) for pairing this phone with the home PC. The phone shows it; the user types it into the
+/// home PC's Add a device window; [`MobileSession::cloud_pair`] then opens the PC's QR text with the same code. Make one each time
+/// the pairing page is opened and keep it in memory only.
+#[uniffi::export]
+pub fn cloud_new_pairing_code() -> String {
+    lightcraft_cloud_client::pairing::new_code()
+}
+
 /// Send the engine's log to logcat (Android; elsewhere it does nothing). Safe to call repeatedly.
 #[uniffi::export]
 pub fn init_logging() {
@@ -1202,8 +1210,8 @@ impl MobileSession {
         Ok(())
     }
 
-    /// Pair with the home PC: opens the pairing text (what the "Add a device" window's QR code holds, "LCP1...") with its
-    /// code, writes the rclone config it carries to `config_path` (the app's private file), and connects as
+    /// Pair with the home PC: opens the pairing text (what the "Add a device" window's QR code holds, "LCP1...") with the
+    /// code this phone made and showed ([`cloud_new_pairing_code`]), writes the rclone config it carries to `config_path` (the app's private file), and connects as
     /// [`MobileSession::cloud_connect`] does. Returns whether a device of that name has already sent edits to this library
     /// (then the name should be changed, or two phones would mix up their edits; the connection is made either way).
     /// If connecting fails, the config file is put back as it was. The error messages never contain the text, the code or

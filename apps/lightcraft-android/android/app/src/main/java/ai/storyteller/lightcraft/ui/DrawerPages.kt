@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -389,14 +390,15 @@ private fun ColumnScope.CloudNotConnected(vm: AppViewModel) {
 }
 
 /**
- * Pair with the home PC: its "Add a device" window shows a QR code (a text that starts with LCP1) and a code like
- * ABCDE-12345. The text and the code live only in this composable's state (not saved with the instance state, not logged)
- * and are dropped once paired or when the page is left.
+ * Pair with the home PC. This phone makes a code (like 7K2M-9QXD-4TB) and shows it; the person types it into the home PC's
+ * "Add a device" window, which then shows a QR code (a text that starts with LCP1) locked with that code. Nothing is typed
+ * here. The code and the text live only in this composable's `remember` state (not saved with the instance state, not logged),
+ * so leaving the page drops them and the next visit makes a new code; they are dropped once paired too.
  */
 @Composable
 private fun ColumnScope.CloudPair(vm: AppViewModel) {
     var text by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
+    val code = remember { CloudConfig.newPairingCode() }
     var pasting by remember { mutableStateOf(false) }
     var device by remember { mutableStateOf(CloudConfig.defaultDeviceName()) }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -412,7 +414,12 @@ private fun ColumnScope.CloudPair(vm: AppViewModel) {
     val haveText = CloudConfig.isPairingText(text)
     PageGroup {
         PageHeading("Pair with your PC")
-        PageNote("On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device. It shows a QR code and a code.")
+        Text(
+            code,
+            color = pageText, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 13.7.dp, vertical = 8.dp),
+        )
+        PageNote("On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device and type this code. Then scan the QR code it shows, or paste its text.")
         PageAction("Scan the QR code", enabled = busy == null) {
             problem = null
             val options = ScanOptions()
@@ -437,7 +444,7 @@ private fun ColumnScope.CloudPair(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "In Add a device, choose Copy text; it starts with LCP1.",
+                    "In Add a device, choose Copy text for another PC; it starts with LCP1.",
                     color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
                 )
             }
@@ -447,19 +454,6 @@ private fun ColumnScope.CloudPair(vm: AppViewModel) {
         PageGroup {
             PageFact("Pairing text", "Ready")
             Column(Modifier.padding(horizontal = 13.7.dp, vertical = 6.dp)) {
-                OutlinedTextField(
-                    code,
-                    { code = it },
-                    singleLine = true,
-                    enabled = busy == null,
-                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Password),
-                    label = { Text("Code from the PC", fontFamily = Inter) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    "Like ABCDE-12345. Capitals, spaces and dashes don't matter.",
-                    color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-                )
                 OutlinedTextField(
                     device,
                     { device = it },
@@ -474,10 +468,10 @@ private fun ColumnScope.CloudPair(vm: AppViewModel) {
                     color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
                 )
             }
-            PageAction("Connect", enabled = busy == null && code.isNotBlank() && CloudConfig.validDevice(device.trim())) {
+            PageAction("Connect", enabled = busy == null && CloudConfig.validDevice(device.trim())) {
                 problem = null
                 vm.pairCloud(text, code, device) { ok ->
-                    if (ok) { text = ""; code = "" }
+                    if (ok) text = ""
                 }
             }
         }

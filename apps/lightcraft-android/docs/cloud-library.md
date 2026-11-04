@@ -14,22 +14,25 @@ is kept below.
 
 ## Pair the phone with your PC
 
-1. On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device. It shows a QR code and a code like
-   `ABCDE-12345`.
-2. On the phone, open Cloud library. Choose **Scan the QR code** and point the camera at the PC's
-   screen. (No camera, or the scan fails: choose **Paste the text instead**, and paste the text the
-   window's Copy text button gave you. It starts with `LCP1`.)
-3. Type the code (capitals, spaces and dashes don't matter) and, if you like, change the name of
-   this phone (letters, digits, `_`, `-` and `.`, up to 64; the PC files its edits under that name,
-   so two phones need two names). Choose **Connect**.
+1. On the phone, open Cloud library ▸ **Pair with your PC**. The phone shows a code in large type,
+   like `7K2M-9QXD-4TB`. Leave the page open: a new code is made every time you open it.
+2. On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device, and type that code into the code
+   field (the field hides what you type). Press **Show pairing QR**. If the PC says the code has a
+   typo, check it against the phone.
+3. On the phone, choose **Scan the QR code** and point the camera at the PC's screen. (No camera, or
+   the scan fails: choose **Paste the text instead**, and paste the text the window's Copy text
+   button gave you. It starts with `LCP1`.) You type no code on the phone.
+4. If you like, change the name of this phone (letters, digits, `_`, `-` and `.`, up to 64; the PC
+   files its edits under that name, so two phones need two names). Choose **Connect**.
 
-The QR code holds the connection details, locked with the code, so the code is never in the QR code
-and a photo of the screen alone is not enough. The phone opens them (about a second), saves them in
-the app's private storage, connects and loads the photos. The text and the code are not kept: they
-are dropped as soon as the phone is paired, or when you leave the page, and are never logged. The
-camera permission is asked for only when you choose Scan the QR code (and for the camera button).
-If a phone of the same name has already sent edits to this library, the app says so; disconnect
-and pair again with another name.
+Why this order: the home PC's screen only ever shows the locked QR code, never the code. A screen
+share or a photo of the PC's screen therefore gives nobody anything: the code lives on the phone
+and in the box you typed it into. The phone opens the QR code's contents with the code it already
+holds (about a second), saves them in the app's private storage, connects and loads the photos.
+The text and the code are not kept: they are dropped as soon as the phone is paired, or when you
+leave the page, and are never logged. The camera permission is asked for only when you choose Scan
+the QR code (and for the camera button). If a phone of the same name has already sent edits to this
+library, the app says so; disconnect and pair again with another name.
 
 ## Use an rclone config file instead
 
