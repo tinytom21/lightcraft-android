@@ -896,3 +896,44 @@ fn the_cloud_library_connects_refreshes_sends_edits_and_comes_back_after_a_resta
     assert!(!s.cloud_status().connected, "disconnected stays disconnected");
     let _ = std::fs::remove_dir_all(&base);
 }
+
+#[test]
+fn pairing_refuses_a_wrong_code_and_connects_with_a_good_bundle() {
+    if !host_librclone() {
+        eprintln!("skipped: scripts/build-librclone.sh host has not been run");
+        return;
+    }
+    use lightcraft_cloud_client::pairing::{Bundle, seal};
+    let base = temp_dir("pairing");
+    let remote = cloud_remote(&base);
+    let conf = base.join("private").join("phone-rclone.conf");
+    let conf_s = conf.to_string_lossy().to_string();
+    // (synthetic: a local folder remote needs no config text)
+    let (text, code) = seal(&Bundle::new(remote.to_string_lossy().to_string(), "# synthetic\n")).unwrap();
+    let s = MobileSession::open(base.join("lib").to_string_lossy().to_string(), false).unwrap();
+
+    // wrong code, not a pairing text, bad name: refused, nothing written, nothing leaked
+    let wrong = if code.starts_with('A') { "BBBBB-22222" } else { "AAAAA-22222" };
+    for (t, c, n) in [(&text, wrong, "pixel-9"), (&"hello".to_string(), code.as_str(), "pixel-9"), (&text, code.as_str(), "bad name!")] {
+        let e = s.cloud_pair(t.clone(), c.to_string(), n.into(), conf_s.clone()).unwrap_err().to_string();
+        assert!(!e.contains(&text) && !e.contains(c) && !e.contains("synthetic"), "{e}");
+        assert!(!conf.exists() && !s.cloud_status().connected);
+    }
+
+    // a good bundle, typed the way a person would: lower case, spaces, a dash
+    let typed = format!(" {} ", code.to_lowercase().replace('-', " "));
+    let in_use = s.cloud_pair(text.clone(), typed, "pixel-9".into(), conf_s.clone()).unwrap();
+    assert!(!in_use);
+    assert_eq!(std::fs::read_to_string(&conf).unwrap(), "# synthetic\n");
+    let st = s.cloud_status();
+    assert!(st.connected && st.remote == remote.to_string_lossy() && st.device == "pixel-9", "{st:?}");
+    assert_eq!(s.cloud_refresh().unwrap().total, 3);
+
+    // after an edit is sent, the name is in use
+    std::fs::create_dir_all(remote.join("inbox/pixel-9")).unwrap();
+    std::fs::write(remote.join("inbox/pixel-9/x.xmp"), b"x").unwrap();
+    assert!(s.cloud_device_in_use(conf_s.clone(), remote.to_string_lossy().to_string(), "pixel-9".into()).unwrap());
+    assert!(s.cloud_pair(text.clone(), code.clone(), "pixel-9".into(), conf_s.clone()).unwrap());
+    assert!(!s.cloud_device_in_use(conf_s, remote.to_string_lossy().to_string(), "other".into()).unwrap());
+    let _ = std::fs::remove_dir_all(&base);
+}

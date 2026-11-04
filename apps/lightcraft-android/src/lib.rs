@@ -597,6 +597,11 @@ impl MobileSession {
         c.ok_or_else(|| MobileError::Cloud(self.cloud_error.lock().unwrap_or_else(PoisonError::into_inner).clone().unwrap_or_else(|| "no cloud library is connected".into())))
     }
 
+    fn device_in_use_at(config_path: &str, remote: &str, device: &str) -> Result<bool, MobileError> {
+        let r = lightcraft_cloud_client::RcloneRemote::open(librclone_path().as_deref(), std::path::Path::new(config_path), remote.trim(), None).map_err(cloud_err)?;
+        lightcraft_cloud_client::other::device_in_use(&r, device).map_err(cloud_err)
+    }
+
     /// Load the storage of `settings` and make it the cloud library (nothing is saved).
     fn connect_cloud(&self, settings: &CloudSettings, check: bool) -> Result<(), MobileError> {
         use lightcraft_cloud_client::Remote;
@@ -1195,6 +1200,46 @@ impl MobileSession {
         let json = serde_json::to_vec_pretty(&settings).map_err(|e| MobileError::Cloud(e.to_string()))?;
         std::fs::write(dir.join("cloud.json"), json).map_err(|e| MobileError::Cloud(format!("cloud.json: {e}")))?;
         Ok(())
+    }
+
+    /// Pair with the home PC: opens the pairing text (what the "Add a device" window's QR code holds, "LCP1...") with its
+    /// code, writes the rclone config it carries to `config_path` (the app's private file), and connects as
+    /// [`MobileSession::cloud_connect`] does. Returns whether a device of that name has already sent edits to this library
+    /// (then the name should be changed, or two phones would mix up their edits; the connection is made either way).
+    /// If connecting fails, the config file is put back as it was. The error messages never contain the text, the code or
+    /// the config. Argon2 takes about a second and the storage is reached: call it off the main thread.
+    pub fn cloud_pair(&self, text: String, code: String, device_name: String, config_path: String) -> Result<bool, MobileError> {
+        use lightcraft_cloud_client::pairing;
+        let device = device_name.trim().to_string();
+        if !lightcraft_cloud_client::valid_device(&device) {
+            return Err(MobileError::Cloud("the device name can have letters, digits, _ - . and up to 64 characters".into()));
+        }
+        let bundle = pairing::open(&text, &code).map_err(cloud_err)?;
+        let path = std::path::Path::new(&config_path);
+        let before = std::fs::read(path).ok();
+        pairing::write_config(path, &bundle.config).map_err(cloud_err)?;
+        let attempt = (|| {
+            let in_use = Self::device_in_use_at(&config_path, &bundle.remote, &device).unwrap_or(false);
+            self.cloud_connect(config_path.clone(), bundle.remote.clone(), device.clone())?;
+            Ok(in_use)
+        })();
+        if attempt.is_err() {
+            match before {
+                Some(old) => {
+                    let _ = std::fs::write(path, old);
+                }
+                None => {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+        attempt
+    }
+
+    /// Whether a device of that name has already sent edits to the library at `remote` (see [`MobileSession::cloud_pair`]).
+    /// Reaches the storage: call it off the main thread.
+    pub fn cloud_device_in_use(&self, config_path: String, remote: String, device_name: String) -> Result<bool, MobileError> {
+        Self::device_in_use_at(&config_path, &remote, device_name.trim())
     }
 
     /// Forget the connection (the settings file). Photos, thumbnails and previews already on the phone stay,
