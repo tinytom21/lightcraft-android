@@ -900,6 +900,20 @@ fn the_cloud_library_connects_refreshes_sends_edits_and_comes_back_after_a_resta
 /// Photos picked on the phone go to the home PC's imports through the real rclone (a folder stands in for the remote): queued, sent in
 /// steps, resumed after a restart, with HEIC and a photo the library has already left out. The home PC's side is tested in the cloud crate.
 #[test]
+fn upload_kinds_follow_what_the_home_pc_adopts() {
+    use crate::{UploadKind::*, cloud_upload_kind as k};
+    for n in ["a.jpg", "A.JPEG", "a.png", "a.tif", "a.tiff", "a.DNG", "a.arw", "a.cr3", "a.nef", "a.raf"] {
+        assert_eq!(k(n.into()), Send, "{n}");
+    }
+    for n in ["a.heic", "A.HEIF"] {
+        assert_eq!(k(n.into()), Heic, "{n}");
+    }
+    for n in ["a.webp", "a.gif", "a.mp4", "noext", "a.jpg.txt"] {
+        assert_eq!(k(n.into()), Unsupported, "{n}");
+    }
+}
+
+#[test]
 fn photos_are_queued_sent_and_survive_a_restart() {
     if !host_librclone() {
         eprintln!("skipped: scripts/build-librclone.sh host has not been run");

@@ -533,6 +533,17 @@ pub struct UploadRejected {
     pub reason: String,
 }
 
+/// Whether a file name can go to the home PC.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum UploadKind {
+    /// A photo type the home PC adopts.
+    Send,
+    /// HEIC / HEIF: LightCraft cannot read them yet.
+    Heic,
+    /// Anything else (WebP, GIF, video...): not sent.
+    Unsupported,
+}
+
 /// The photo uploads to the home PC, for a status line; cheap (no network).
 #[derive(Debug, Clone, Default, uniffi::Record)]
 pub struct UploadState {
@@ -618,6 +629,19 @@ fn upload_state(s: lightcraft_cloud_client::UploadStatus) -> UploadState {
         skipped_other: n(s.skipped_other),
         bytes_done: s.bytes_done,
         bytes_total: s.bytes_total,
+    }
+}
+
+/// Whether a photo called `name` can be sent to the home PC (the same rule [`MobileSession::cloud_enqueue_uploads`] applies): ask before
+/// copying a big file.
+#[uniffi::export]
+pub fn cloud_upload_kind(name: String) -> UploadKind {
+    if lightcraft_cloud_client::is_heic(&name) {
+        UploadKind::Heic
+    } else if lightcraft_cloud_client::is_sendable(&name) {
+        UploadKind::Send
+    } else {
+        UploadKind::Unsupported
     }
 }
 
