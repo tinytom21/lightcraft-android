@@ -40,6 +40,9 @@ object CloudConfig {
         return cleaned.ifEmpty { "phone" }
     }
 
+    /** Whether [text] looks like a pairing text (what the PC's Add a device window shows): it starts with LCP1. */
+    fun isPairingText(text: String): Boolean = text.trim().startsWith("LCP1") && text.trim().length > 4
+
     /** Whether [name] is a device name the cloud accepts. */
     fun validDevice(name: String): Boolean = Regex("[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}").matches(name)
 

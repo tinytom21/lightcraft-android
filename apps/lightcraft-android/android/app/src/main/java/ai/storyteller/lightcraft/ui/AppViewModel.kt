@@ -1275,6 +1275,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Pair with the home PC: the pairing [text] (the QR code's) and its [code] open the connection details, which are
+     * saved in the app's private config file, then it connects and fetches the photos like [connectCloud]. Argon2 takes
+     * about a second, so it runs off the main thread. Neither the text nor the code is kept or logged here; the caller
+     * drops them. [onDone] says whether it connected.
+     */
+    fun pairCloud(text: String, code: String, device: String, onDone: (Boolean) -> Unit) {
+        val e = engine ?: return onDone(false)
+        if (cloudBusy != null) return onDone(false)
+        cloudBusy = "Pairing…"
+        cloudError = null
+        viewModelScope.launch {
+            val config = CloudConfig.file(getApplication()).absolutePath
+            val name = device.trim()
+            val paired = runCatching { withContext(Dispatchers.IO) { e.session.cloudPair(text, code, name, config) } }
+            paired.onFailure { cloudError = it.message ?: "Pairing failed." }
+            paired.onSuccess { inUse ->
+                if (inUse) say("Another device named $name already sends edits to this library. Disconnect and pair again with another name, or the two will mix up their edits.")
+                cloudBusy = "Loading the photos…"
+                cloudSyncedAt = SystemClock.elapsedRealtime()
+                val refreshed = runCatching { withContext(Dispatchers.IO) { e.session.cloudRefresh() } }
+                refreshed.onFailure { say("Paired, but the photos couldn't be loaded: ${it.message}") }
+                refreshed.onSuccess { cloudRefreshed(it, manual = true) }
+                refreshPhotos()
+            }
+            cloudBusy = null
+            refreshCloudStatus()
+            onDone(paired.isSuccess)
+        }
+    }
+
+    /**
      * Forget the connection. The photos stay in the library (and their thumbnails and downloaded previews
      * on the phone), edits not sent yet stay in their sidecars; nothing on the remote changes.
      */

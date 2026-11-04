@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,10 +63,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import java.util.Locale
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -357,7 +362,7 @@ private val cacheChoices = listOf(1L, 2L, 5L, 10L)
 
 /**
  * Cloud library: the photos a PC published to cloud storage (docs/cloud-library.md), edited here and
- * sent back. Not connected: pick the rclone config file, the remote in it, the folder on it and this
+ * sent back. Not connected: pair with the PC (QR code and code), or pick the rclone config file, the remote in it, the folder on it and this
  * phone's name. Connected: what is there and what is waiting, the size of the preview cache,
  * Refresh now and Disconnect.
  */
@@ -366,8 +371,119 @@ private fun CloudLibraryPage(vm: AppViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { vm.refreshCloudStatus() }
     val st = vm.cloud
     DrawerPage("Cloud library", onBack) {
-        if (st != null && vm.cloudConfigured) CloudConnected(vm, st) else CloudConnect(vm)
+        if (st != null && vm.cloudConfigured) CloudConnected(vm, st) else CloudNotConnected(vm)
     }
+}
+
+/** Not connected: pairing with the home PC, with the rclone config file route under it for the people who prefer it. */
+@Composable
+private fun ColumnScope.CloudNotConnected(vm: AppViewModel) {
+    var byFile by remember { mutableStateOf(false) }
+    if (byFile) {
+        CloudConnect(vm)
+        PageGroup { PageAction("Pair with your PC instead", enabled = vm.cloudBusy == null) { byFile = false } }
+    } else {
+        CloudPair(vm)
+        PageGroup { PageAction("Use an rclone config file instead", enabled = vm.cloudBusy == null) { byFile = true } }
+    }
+}
+
+/**
+ * Pair with the home PC: its "Add a device" window shows a QR code (a text that starts with LCP1) and a code like
+ * ABCDE-12345. The text and the code live only in this composable's state (not saved with the instance state, not logged)
+ * and are dropped once paired or when the page is left.
+ */
+@Composable
+private fun ColumnScope.CloudPair(vm: AppViewModel) {
+    var text by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var pasting by remember { mutableStateOf(false) }
+    var device by remember { mutableStateOf(CloudConfig.defaultDeviceName()) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    val busy = vm.cloudBusy
+    val scan = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val scanned = result.contents?.trim()
+        when {
+            scanned == null -> Unit
+            CloudConfig.isPairingText(scanned) -> { text = scanned; problem = null }
+            else -> problem = "That QR code isn't a LightCraft pairing code. Scan the one in Add a device on the PC."
+        }
+    }
+    val haveText = CloudConfig.isPairingText(text)
+    PageGroup {
+        PageHeading("Pair with your PC")
+        PageNote("On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device. It shows a QR code and a code.")
+        PageAction("Scan the QR code", enabled = busy == null) {
+            problem = null
+            val options = ScanOptions()
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setPrompt("Scan the QR code in Add a device")
+                .setBeepEnabled(false)
+                .setOrientationLocked(false)
+            runCatching { scan.launch(options) }.onFailure { vm.tell("The camera couldn't be opened.") }
+        }
+        PageAction("Paste the text instead", enabled = busy == null) { pasting = !pasting }
+        if (pasting) {
+            Column(Modifier.padding(horizontal = 13.7.dp, vertical = 6.dp)) {
+                OutlinedTextField(
+                    text,
+                    { text = it.filterNot { c -> c.isWhitespace() }; problem = null },
+                    enabled = busy == null,
+                    minLines = 2,
+                    maxLines = 4,
+                    isError = text.isNotEmpty() && !haveText,
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
+                    label = { Text("Text copied from the PC", fontFamily = Inter) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "In Add a device, choose Copy text; it starts with LCP1.",
+                    color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                )
+            }
+        }
+    }
+    if (haveText) {
+        PageGroup {
+            PageFact("Pairing text", "Ready")
+            Column(Modifier.padding(horizontal = 13.7.dp, vertical = 6.dp)) {
+                OutlinedTextField(
+                    code,
+                    { code = it },
+                    singleLine = true,
+                    enabled = busy == null,
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Password),
+                    label = { Text("Code from the PC", fontFamily = Inter) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Like ABCDE-12345. Capitals, spaces and dashes don't matter.",
+                    color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                OutlinedTextField(
+                    device,
+                    { device = it },
+                    singleLine = true,
+                    enabled = busy == null,
+                    isError = device.isNotEmpty() && !CloudConfig.validDevice(device.trim()),
+                    label = { Text("Name of this phone", fontFamily = Inter) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "The PC files this phone's edits under it: letters, digits, _ - and . (up to 64).",
+                    color = pageNote, fontFamily = Inter, fontSize = 13.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                )
+            }
+            PageAction("Connect", enabled = busy == null && code.isNotBlank() && CloudConfig.validDevice(device.trim())) {
+                problem = null
+                vm.pairCloud(text, code, device) { ok ->
+                    if (ok) { text = ""; code = "" }
+                }
+            }
+        }
+    }
+    busy?.let { PageBusy(it) }
+    (problem ?: vm.cloudError)?.let { PageNote(it, pageError) }
 }
 
 @Composable
