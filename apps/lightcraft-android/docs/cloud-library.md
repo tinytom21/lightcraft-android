@@ -8,15 +8,41 @@ the edit back to the PC, which stays the master copy. The phone never holds the 
 ask for a full-size export.
 
 The phone reaches the storage through [rclone](https://rclone.org), built into the app, so any
-rclone backend works (Google Drive, OneDrive, Dropbox, S3, WebDAV, SFTP, a folder…). What the app
-needs is one **rclone config file** that contains one remote: a *phone-only* remote.
+rclone backend works (Google Drive, OneDrive, Dropbox, S3, WebDAV, SFTP, a folder…). The easy way
+to give the phone access is to **pair** it with the PC; the manual way, with an rclone config file,
+is kept below.
 
-## Make a phone-only remote
+## Pair the phone with your PC
+
+1. On the home PC, open LightCraft Cloud ▸ Status ▸ Add a device. It shows a QR code and a code like
+   `ABCDE-12345`.
+2. On the phone, open Cloud library. Choose **Scan the QR code** and point the camera at the PC's
+   screen. (No camera, or the scan fails: choose **Paste the text instead**, and paste the text the
+   window's Copy text button gave you. It starts with `LCP1`.)
+3. Type the code (capitals, spaces and dashes don't matter) and, if you like, change the name of
+   this phone (letters, digits, `_`, `-` and `.`, up to 64; the PC files its edits under that name,
+   so two phones need two names). Choose **Connect**.
+
+The QR code holds the connection details, locked with the code, so the code is never in the QR code
+and a photo of the screen alone is not enough. The phone opens them (about a second), saves them in
+the app's private storage, connects and loads the photos. The text and the code are not kept: they
+are dropped as soon as the phone is paired, or when you leave the page, and are never logged. The
+camera permission is asked for only when you choose Scan the QR code (and for the camera button).
+If a phone of the same name has already sent edits to this library, the app says so; disconnect
+and pair again with another name.
+
+## Use an rclone config file instead
+
+If you can't pair (a PC without the Add a device window, a remote you make yourself), the app
+needs one **rclone config file** that contains one remote: a *phone-only* remote. On the Cloud
+library page choose "Use an rclone config file instead".
+
+### Make a phone-only remote
 
 Do this on the PC, where rclone is installed. Use a **separate remote** for the phone, not the one the
 PC publishes with, so the phone can be cut off without touching the PC.
 
-### Google Drive: limit it to one folder
+#### Google Drive: limit it to one folder
 
 1. In Drive, open the folder the PC publishes into (the one that holds `originals/`, `mobile/`,
    `inbox/`). Its address ends in `/folders/<folder id>`; copy that id.
@@ -36,12 +62,12 @@ PC publishes with, so the phone can be cut off without touching the PC.
 
    The remote's root *is* the library, so in the app the remote is `phone:`.
 
-### Other backends: a path
+#### Other backends: a path
 
 Make the remote as usual (`rclone config`) and give the app the path of the library on it:
 `phone:LightCraft Cloud` for S3 or WebDAV, `phone:photos/cloud` for SFTP.
 
-## Export just that remote to a file
+### Export just that remote to a file
 
 `rclone config show` prints one remote (the section and its token), nothing else:
 
@@ -62,7 +88,7 @@ PC's.
 Copy that section from the config file instead, and pick the crypt remote in the app; see
 [Encrypting the remote](https://github.com/tinytom21/lightcraft-cloud#encrypting-the-remote).
 
-## What the file lets the phone do
+### What the file lets the phone do
 
 The phone writes only to `inbox/<its name>/`, as new files that are never overwritten; the PC
 validates every one before applying it. It reads thumbnails, previews, the manifest and, for a
@@ -82,7 +108,7 @@ created, which does not include the PC's uploads.
 
 ## In the app
 
-Connect (the app checks it can reach the library), then Refresh: thumbnails appear, and the first
+Connect or pair (the app checks it can reach the library) and the photos load; Refresh: thumbnails appear, and the first
 time you open a photo its preview downloads (about 2 to 3 MB). Edits are written to the photo's XMP
 sidecar on the phone and sent to the PC when you push (or automatically, once the UI does so); with
 no network they wait and go later. If the PC changed a photo's edits you have not sent yet, the PC's
