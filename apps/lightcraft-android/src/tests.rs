@@ -897,6 +897,131 @@ fn the_cloud_library_connects_refreshes_sends_edits_and_comes_back_after_a_resta
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// The PC's albums arrive as ordinary albums in a "From PC" folder, follow the PC's renames and removals, are put back when edited here,
+/// and leave the user's own albums alone. (The album folder shows in the phone's albums list like any folder, so the app needs no change.)
+#[test]
+fn the_pcs_albums_become_ordinary_albums_in_from_pc_and_the_users_own_are_left_alone() {
+    if !host_librclone() {
+        eprintln!("skipped: scripts/build-librclone.sh host has not been run");
+        return;
+    }
+    let base = temp_dir("cloud-albums");
+    let remote = cloud_remote(&base);
+    let conf = base.join("rclone.conf");
+    std::fs::write(&conf, "").unwrap();
+    let publish = |albums: serde_json::Value| {
+        let path = remote.join("mobile/manifest.json");
+        let mut m: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        m["albums"] = albums;
+        std::fs::write(path, m.to_string()).unwrap();
+    };
+    publish(serde_json::json!([
+        {"id": "7", "name": "Trip", "path": ["Europe"], "smart": false, "photos": [cloud_hex(1), cloud_hex(3)]},
+        {"id": "8", "name": "Good ones", "path": [], "smart": true, "photos": [cloud_hex(3)]}
+    ]));
+    let s = MobileSession::open(base.join("lib").to_string_lossy().to_string(), false).unwrap();
+    let mine: serde_json::Value = serde_json::from_str(&s.execute("album.create".into(), r#"{"name":"Mine"}"#.into()).unwrap()).unwrap();
+    let mine = mine["id"].as_u64().unwrap();
+    s.cloud_connect(conf.to_string_lossy().to_string(), remote.to_string_lossy().to_string(), "pixel-9".into()).unwrap();
+    let r = s.cloud_refresh().unwrap();
+    assert!(r.failures.is_empty(), "{r:?}");
+    let ids: std::collections::HashMap<String, u64> = s.photos().into_iter().map(|p| (p.file_name, p.id)).collect();
+    let shot = ids["shot.JPG"];
+
+    // the phone's albums as "path/name -> member file names", as the app's albums list shows them (the overview is what it reads)
+    let tree = || -> std::collections::BTreeMap<String, Vec<String>> {
+        let list: serde_json::Value = serde_json::from_str(&s.execute("albums.list".into(), "{}".into()).unwrap()).unwrap();
+        let names: std::collections::HashMap<u64, String> = s.photos().into_iter().map(|p| (p.id, p.file_name)).collect();
+        fn walk(s: &MobileSession, names: &std::collections::HashMap<u64, String>, list: &[serde_json::Value], prefix: &str, out: &mut std::collections::BTreeMap<String, Vec<String>>) {
+            for a in list {
+                let path = format!("{prefix}{}", a["name"].as_str().unwrap());
+                if a["folder"].as_bool().unwrap() {
+                    out.insert(format!("{path}/"), vec![]);
+                    walk(s, names, a["children"].as_array().unwrap(), &format!("{path}/"), out);
+                } else {
+                    let q: serde_json::Value =
+                        serde_json::from_str(&s.execute("catalog.query".into(), format!(r#"{{"filter":{{"album":{}}},"limit":100}}"#, a["id"])).unwrap()).unwrap();
+                    let mut m: Vec<String> = q["photos"].as_array().unwrap().iter().map(|p| names[&p["id"].as_u64().unwrap()].clone()).collect();
+                    m.sort();
+                    out.insert(path, m);
+                }
+            }
+        }
+        let mut out = std::collections::BTreeMap::new();
+        walk(&s, &names, list.as_array().unwrap(), "", &mut out);
+        out
+    };
+    let m = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    // (the raw partner of the pair is not a member: the PC lists the primary)
+    let want = |trip: &[&str], good: &[&str]| {
+        std::collections::BTreeMap::from([
+            ("Mine".to_string(), vec![]),
+            ("From PC/".to_string(), vec![]),
+            ("From PC/Europe/".to_string(), vec![]),
+            ("From PC/Europe/Trip".to_string(), m(trip)),
+            ("From PC/Good ones".to_string(), m(good)),
+        ])
+    };
+    assert_eq!(tree(), want(&["shot.JPG", "solo.jpg"], &["solo.jpg"]));
+    // the title menu (the library overview the app reads) lists the folder at the top level, its folder and albums inside, and counts them
+    let o = s.library_overview();
+    let find = |name: &str| o.albums.iter().find(|a| a.name == name).unwrap_or_else(|| panic!("no {name} in the overview")).clone();
+    let (from_pc, europe, trip, good) = (find("From PC"), find("Europe"), find("Trip"), find("Good ones"));
+    assert_eq!((from_pc.folder, from_pc.parent, from_pc.count), (true, None, 2));
+    assert_eq!((europe.folder, europe.parent, europe.count), (true, Some(from_pc.id), 1));
+    assert_eq!((trip.folder, trip.parent, trip.count, trip.smart), (false, Some(europe.id), 2, false));
+    assert_eq!((good.parent, good.count, good.smart), (Some(from_pc.id), 1, false), "a smart album of the PC is an ordinary album here");
+    // and it opens like any album: the grid shows its photos
+    s.execute("library.source".into(), format!(r#"{{"kind":"album","id":{}}}"#, trip.id)).unwrap();
+    let mut shown: Vec<String> = s.photos().into_iter().map(|p| p.file_name).collect();
+    shown.sort();
+    assert_eq!(shown, m(&["shot.JPG", "solo.jpg"]));
+    s.execute("library.source".into(), r#"{"kind":"all"}"#.into()).unwrap();
+
+    // the user's own album takes a photo; an edit of a mirrored album is put back by the next refresh
+    s.execute("library.select".into(), format!(r#"{{"ids":[{shot}]}}"#)).unwrap();
+    s.execute("album.addPhotos".into(), format!(r#"{{"id":{mine},"ids":[{shot}]}}"#)).unwrap();
+    let trip = tree_id(&s, "Trip");
+    s.execute("album.removePhotos".into(), format!(r#"{{"id":{trip},"ids":[{shot}]}}"#)).unwrap();
+    s.execute("album.rename".into(), format!(r#"{{"id":{trip},"name":"Mine too"}}"#)).unwrap();
+    assert_ne!(tree(), want(&["shot.JPG", "solo.jpg"], &["solo.jpg"]));
+    assert!(s.cloud_refresh().unwrap().failures.is_empty());
+    let mut expect = want(&["shot.JPG", "solo.jpg"], &["solo.jpg"]);
+    expect.insert("Mine".to_string(), m(&["shot.JPG"]));
+    assert_eq!(tree(), expect, "view-only: put back; the user's album kept its photo");
+    assert_eq!(tree_id(&s, "Trip"), trip, "the same album, not a new one");
+
+    // the PC renames one, drops the other and takes a photo out
+    publish(serde_json::json!([{"id": "7", "name": "Lisbon", "path": ["Europe"], "smart": false, "photos": [cloud_hex(3)]}]));
+    assert!(s.cloud_refresh().unwrap().failures.is_empty());
+    let mut expect = want(&["solo.jpg"], &[]);
+    expect.remove("From PC/Good ones");
+    expect.remove("From PC/Europe/Trip");
+    expect.insert("From PC/Europe/Lisbon".to_string(), m(&["solo.jpg"]));
+    expect.insert("Mine".to_string(), m(&["shot.JPG"]));
+    assert_eq!(tree(), expect);
+    assert_eq!(tree_id(&s, "Lisbon"), trip, "a rename keeps the album");
+
+    // a manifest without albums takes the folder away and nothing else; every photo stays
+    let path = remote.join("mobile/manifest.json");
+    let mut mf: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    mf.as_object_mut().unwrap().remove("albums");
+    std::fs::write(&path, mf.to_string()).unwrap();
+    assert!(s.cloud_refresh().unwrap().failures.is_empty());
+    assert_eq!(tree(), std::collections::BTreeMap::from([("Mine".to_string(), m(&["shot.JPG"]))]));
+    assert_eq!(s.photos().len(), 3);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// The id of the album with this name, anywhere in the phone's albums.
+fn tree_id(s: &MobileSession, name: &str) -> u64 {
+    fn find(list: &[serde_json::Value], name: &str) -> Option<u64> {
+        list.iter().find_map(|a| if a["name"] == name { a["id"].as_u64() } else { find(a["children"].as_array().unwrap(), name) })
+    }
+    let list: serde_json::Value = serde_json::from_str(&s.execute("albums.list".into(), "{}".into()).unwrap()).unwrap();
+    find(list.as_array().unwrap(), name).unwrap_or_else(|| panic!("no album {name}"))
+}
+
 #[test]
 fn pairing_refuses_a_wrong_code_and_connects_with_a_good_bundle() {
     if !host_librclone() {

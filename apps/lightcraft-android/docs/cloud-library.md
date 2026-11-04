@@ -124,6 +124,28 @@ are deleted first and downloaded again when needed.
 Raw + JPEG pairs of one shot are one photo: the app lists the partner too, but hides it
 (`cloud_hidden_photos`).
 
+## Albums from the PC
+
+The PC publishes its LightCraft albums (the manifest's `albums`, see FORMAT.md in the LightCraft Cloud repository), and each refresh
+mirrors them into the phone's own library: an album folder called **From PC** at the top level, with the PC's folders inside it and the
+albums in those, in the albums list of the title menu like any others. They are ordinary albums of the photos the phone has records for
+(a photo outside the synced folder, or one the phone does not have, is left out; a raw partner of a pair is the pair's one photo). A
+smart album on the PC comes as an ordinary album holding the photos that matched when the PC last read it.
+
+**They are view-only.** The PC is the master: every refresh makes **From PC** match the manifest again. Rename or delete a mirrored
+album, add a photo to it or take one out, make an album inside the folder: the next refresh puts it back (the folder and everything in
+it that the PC does not list is deleted; the photos stay in your library). A rename on the PC renames the album here, and it keeps its
+id. When the PC stops publishing albums the folder goes. Albums you make yourself, anywhere outside **From PC**, are never read for
+anything but their place in the tree, and never changed: to keep a mirrored album's photos in an album of your own, add them to your
+album. Do not call a folder of your own **From PC**: the app takes the top-level folder with that name for its own if it lost track of
+its folder.
+
+The mirroring uses the phone engine's own album commands (`album.create`, `album.rename`, `album.reorder`, `album.addPhotos`,
+`album.removePhotos`, `album.delete`) on the phone's catalog and keeps a map from the PC's album ids to the phone's in the cloud state
+(`state.json`). `album.addPhotos` and `album.removePhotos` only run while something is selected, so the first photo of the change is
+selected for the call and your selection is put back afterwards. A failure is listed in the refresh's `failures` and tried again at
+the next refresh.
+
 ## Building the app
 
 The app contains rclone's C library, which Gradle builds with Go (pinned in
