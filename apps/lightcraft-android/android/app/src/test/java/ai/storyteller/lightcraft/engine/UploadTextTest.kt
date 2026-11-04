@@ -81,4 +81,50 @@ class UploadTextTest {
         assertEquals("2026-07-15", PhoneUploads.dayOf(ms, ZoneId.of("Europe/Lisbon")))
         assertEquals("2026-07-14", PhoneUploads.dayOf(ms, ZoneId.of("America/New_York")))
     }
+
+    @Test
+    fun theScanLineSaysWhenAndWhy() {
+        assertEquals("Last checked for new camera photos: 5 minutes ago, found 2.", UploadText.scanLine("5 minutes ago", 2, null))
+        assertEquals("Last checked for new camera photos: now. Not looked: no access to all photos.", UploadText.scanLine("now", 0, "no access to all photos"))
+        assertTrue(UploadText.scanLine(null, 0, null).startsWith("Not checked"))
+    }
+
+    private val since = 1_800_000_000_000L // ms
+
+    @Test
+    fun aPhotoTakenInTheMinuteAfterSwitchingOnIsNew() {
+        val taken = since + 30_000
+        assertTrue(PhoneUploads.isNew(taken, taken / 1000 + 1, since))
+        assertTrue(PhoneUploads.isNew(since + 1, since / 1000, since))
+    }
+
+    @Test
+    fun olderPhotosAreNotNew() {
+        // taken and added before the switch
+        assertFalse(PhoneUploads.isNew(since - 600_000, since / 1000 - 590, since))
+        // an old photo copied into the folder after the switch keeps its old date taken
+        assertFalse(PhoneUploads.isNew(since - 30L * 86_400_000, since / 1000 + 60, since))
+    }
+
+    @Test
+    fun aDateTakenShiftedByTheTimeZoneStillCounts() {
+        // the camera's local time (UTC+1) stored as if it were UTC is an hour early
+        val taken = since + 20_000 - 3_600_000
+        assertTrue(PhoneUploads.isNew(taken, (since + 20_000) / 1000, since))
+    }
+
+    @Test
+    fun withoutADateTakenTheAddedTimeCounts() {
+        assertEquals(1_234_000L, PhoneUploads.effectiveTaken(0, 1234))
+        assertEquals(99L, PhoneUploads.effectiveTaken(99, 1234))
+        assertTrue(PhoneUploads.isNew(0, since / 1000 + 5, since))
+        assertFalse(PhoneUploads.isNew(0, since / 1000 - 3600, since))
+    }
+
+    @Test
+    fun theMarkLooksBackAndNeverPassesAFailedPhoto() {
+        assertEquals(880L, PhoneUploads.nextMark(100, 1000, null))
+        assertEquals(100L, PhoneUploads.nextMark(100, 150, null))
+        assertEquals(500L, PhoneUploads.nextMark(100, 1000, 500))
+    }
 }

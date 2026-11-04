@@ -133,8 +133,10 @@ library page, under **Send photos to the PC**:
 * **Send photos to PC** opens the system photo picker (photos only, several at once). It is always there. The picked photos are copied
   into the app's queue and sent by a background job, so it goes on when you leave the app; photos you pick are sent on any network.
 * **Send new camera photos automatically** is **off** until you turn it on. When on, the photos taken from that moment in the camera
-  folder (`DCIM/Camera`) are queued by a background job that runs about every 15 minutes (never the photos already on the phone), and
-  sent. Turning it on asks to read your photos (Android 13 and later: "Photos and videos"; before that, storage) and nothing else; if you
+  folder (`DCIM/Camera`) are queued and sent. The camera folder is looked at when the app comes to the front, when the Cloud library page opens, when you
+  press Refresh now, by a background job triggered when a picture is added to the gallery, and by a fallback job about every 15 minutes
+  (never the photos already on the phone). The page shows when it last looked, how many new photos it found, and why it did not look
+  (not connected, no access to all photos). Turning it on asks to read your photos (Android 13 and later: "Photos and videos"; before that, storage) and nothing else; if you
   refuse, the switch goes back off and the page says why. On Android 14 and later, if you chose "Select photos" the app cannot see new
   photos: the page says so and has a button to the app's settings, where you allow all photos.
 * **Only on Wi-Fi** (on by default, under the automatic switch): photos found automatically are sent only on a network that is not

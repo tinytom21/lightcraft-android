@@ -10,6 +10,7 @@ import android.media.ExifInterface
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Log
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -45,6 +46,21 @@ class UploadSettings(context: Context) {
         get() = prefs.getStringSet("handled", emptySet()).orEmpty()
         set(v) = prefs.edit().putStringSet("handled", v).apply()
 
+    /** The last look at the camera folder: when (ms), how many new photos it found, and why it did not look (null: it did). */
+    var lastScanAt: Long
+        get() = prefs.getLong("lastScanAt", 0L)
+        set(v) = prefs.edit().putLong("lastScanAt", v).apply()
+    var lastScanFound: Int
+        get() = prefs.getInt("lastScanFound", 0)
+        set(v) = prefs.edit().putInt("lastScanFound", v).apply()
+    var lastScanSkip: String?
+        get() = prefs.getString("lastScanSkip", null)
+        set(v) = prefs.edit().putString("lastScanSkip", v).apply()
+
+    fun recordScan(found: Int, skip: String?, now: Long = System.currentTimeMillis()) {
+        prefs.edit().putLong("lastScanAt", now).putInt("lastScanFound", found).putString("lastScanSkip", skip).apply()
+    }
+
     /** Switch the automatic sending on (from now) or off. */
     fun setAuto(on: Boolean, now: Long = System.currentTimeMillis()) {
         if (on && !auto) {
@@ -61,22 +77,42 @@ class UploadSettings(context: Context) {
  * the upload queue. The queue, the sending and the status are Rust (`MobileSession.cloud*Upload*`).
  */
 object PhoneUploads {
-    /** What a scan of the camera folder found. */
-    data class Scan(val seen: Int, val queued: UploadQueued?)
-
     /** Photos picked with the system photo picker: copied and queued. Blocks: call it off the main thread. */
     fun queuePicked(context: Context, session: MobileSession, uris: List<Uri>): UploadQueued {
         val photos = uris.mapNotNull { runCatching { stage(context, session, it) }.getOrNull() }
         return session.cloudEnqueueUploads(photos)
     }
 
+    /** What a scan of the camera folder found, and why it did not look ([skipped]). */
+    data class Scan(val seen: Int, val queued: UploadQueued?, val skipped: String? = null)
+
+    private val scanLock = Any()
+
+    /** What the app can see of the gallery: all of it with the photo permission, or with All files access (the library-folder option). */
+    fun photoAccess(context: Context): DeviceAccess {
+        val a = DeviceMedia.access(context)
+        if (a != DeviceAccess.FULL && android.os.Build.VERSION.SDK_INT >= 30 && android.os.Environment.isExternalStorageManager()) return DeviceAccess.FULL
+        return a
+    }
+
     /**
      * New photos in the camera folder (DCIM/Camera) taken after the automatic sending was switched on, copied and queued. Needs the
      * permission to read all photos: with only the photos the person selected (Android 14) the new ones are not visible and nothing is
-     * found. Blocks: call it off the main thread.
+     * found. What it did (or why it did not look) is kept in the settings for the Cloud library page and logged. Blocks: call it off the
+     * main thread; one scan at a time.
      */
-    fun scanCamera(context: Context, session: MobileSession, settings: UploadSettings): Scan {
-        if (!settings.auto || DeviceMedia.access(context) != DeviceAccess.FULL) return Scan(0, null)
+    fun scanCamera(context: Context, session: MobileSession, settings: UploadSettings, why: String = "?"): Scan = synchronized(scanLock) {
+        val skip = when {
+            !settings.auto -> return@synchronized Scan(0, null, "off")
+            !session.cloudStatus().connected -> "not connected to the cloud library"
+            photoAccess(context) != DeviceAccess.FULL -> "no access to all photos"
+            else -> null
+        }
+        if (skip != null) {
+            settings.recordScan(0, skip)
+            Log.i(TAG, "camera scan ($why) skipped: $skip")
+            return@synchronized Scan(0, null, skip)
+        }
         val look = lookAtCamera(context, settings)
         val staged = mutableListOf<UploadPhoto>()
         val failed = mutableListOf<CameraRow>()
@@ -87,7 +123,9 @@ object PhoneUploads {
         val queued = if (staged.isEmpty()) null else session.cloudEnqueueUploads(staged)
         // what could not be copied (the file was busy) is looked at again next time
         settings.commit(look, failed.map { it.id.toString() }.toSet(), failed.minOfOrNull { it.added })
-        return Scan(look.fresh.size, queued)
+        settings.recordScan(look.fresh.size, null)
+        Log.i(TAG, "camera scan ($why): ${look.seen.size} rows since the mark, ${look.fresh.size} new, queued=${queued?.queued}, failed=${failed.size}")
+        Scan(look.fresh.size, queued)
     }
 
     /** Whether photos found automatically may be sent now: not while "Only on Wi-Fi" is on and the network is metered (or there is none). */
@@ -104,10 +142,26 @@ object PhoneUploads {
     /** What a look at the camera folder found: the photos to send, and every id seen with when it was added. */
     class Look(val fresh: List<CameraRow>, val seen: Map<String, Long>, val newest: Long)
 
+    /** The time a gallery row was taken, ms: its date taken, or, without that, when it was added (seconds). */
+    fun effectiveTaken(takenMs: Long, addedSec: Long): Long = if (takenMs > 0) takenMs else addedSec * 1000
+
+    /**
+     * Whether a camera row counts as new: added (seconds) since the switch was turned on [sinceMs], and taken after it. Some phones
+     * store a date taken shifted by the time zone (the camera's local time read as UTC), so "taken after" allows [TAKEN_SLACK_MS] for
+     * that; a photo copied into the folder later has an old date taken and is still left out.
+     */
+    fun isNew(takenMs: Long, addedSec: Long, sinceMs: Long): Boolean =
+        addedSec * 1000 + 1000 > sinceMs && effectiveTaken(takenMs, addedSec) > sinceMs - TAKEN_SLACK_MS
+
+    /** The watermark after a scan: the newest row seen less the look-back, never back past a photo that could not be copied. */
+    fun nextMark(watermark: Long, newest: Long, oldestFailed: Long?): Long {
+        val mark = maxOf(watermark, newest - LOOK_BACK_SECONDS)
+        return if (oldestFailed != null) minOf(mark, oldestFailed) else mark
+    }
+
     private fun UploadSettings.commit(look: Look, failedIds: Set<String>, oldestFailed: Long?) {
         // (a photo still being written can show up a little after a newer one: look back a couple of minutes)
-        var mark = maxOf(watermark, look.newest - LOOK_BACK_SECONDS)
-        if (oldestFailed != null) mark = minOf(mark, oldestFailed)
+        val mark = nextMark(watermark, look.newest, oldestFailed)
         handled = look.seen.filter { (id, added) -> added >= mark && id !in failedIds }.keys
         watermark = mark
     }
@@ -134,9 +188,9 @@ object PhoneUploads {
                 newest = maxOf(newest, addedAt)
                 if (rowId.toString() in handled) continue
                 // taken after the switch was turned on (a photo with no date taken counts from when it was added)
-                val takenAt = c.getLong(taken).takeIf { it > 0 } ?: (addedAt * 1000)
-                if (takenAt <= settings.since) continue
-                found += CameraRow(rowId, android.content.ContentUris.withAppendedId(collection, rowId), addedAt, takenAt)
+                val takenMs = c.getLong(taken)
+                if (!isNew(takenMs, addedAt, settings.since)) continue
+                found += CameraRow(rowId, android.content.ContentUris.withAppendedId(collection, rowId), addedAt, effectiveTaken(takenMs, addedAt))
             }
         }
         return Look(found, seen, newest)
@@ -215,6 +269,8 @@ object PhoneUploads {
     /** The local date of [ms] as `yyyy-MM-dd`. */
     fun dayOf(ms: Long, zone: ZoneId = ZoneId.systemDefault()): String = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate().toString()
 
+    private const val TAKEN_SLACK_MS = 15L * 3600 * 1000
+    private const val TAG = "LcUploads"
     private const val LOOK_BACK_SECONDS = 120L
     private const val MAX_HANDLED = 2000
 }

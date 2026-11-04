@@ -5,6 +5,7 @@ import ai.storyteller.lightcraft.core.engineVersion
 import ai.storyteller.lightcraft.engine.CloudConfig
 import ai.storyteller.lightcraft.engine.DeviceAccess
 import ai.storyteller.lightcraft.engine.DeviceMedia
+import ai.storyteller.lightcraft.engine.PhoneUploads
 import ai.storyteller.lightcraft.engine.UploadText
 import ai.storyteller.lightcraft.engine.LibraryFolder
 import android.content.Context
@@ -616,11 +617,11 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
 @Composable
 private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
     val context = LocalContext.current
-    var access by remember { mutableStateOf(DeviceMedia.access(context)) }
+    var access by remember { mutableStateOf(PhoneUploads.photoAccess(context)) }
     var asked by remember { mutableStateOf(false) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> if (uris.isNotEmpty()) vm.sendPhotosToPc(uris) }
     val askAccess = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        access = DeviceMedia.access(context)
+        access = PhoneUploads.photoAccess(context)
         asked = true
         if (access == DeviceAccess.NONE) {
             // refused: the switch goes back off, and the page says why
@@ -632,9 +633,11 @@ private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
     }
     // back from the system's settings, where the person may have changed what the app can see
     LifecycleResumeEffect(Unit) {
-        access = DeviceMedia.access(context)
+        access = PhoneUploads.photoAccess(context)
         onPauseOrDispose {}
     }
+    // opening the page looks for new camera photos
+    LaunchedEffect(Unit) { vm.scanCameraNow("page opened") }
     LaunchedEffect(Unit) {
         while (true) {
             vm.refreshUploads()
@@ -669,6 +672,8 @@ private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
             }
         }
     }
+    vm.uploadScanNote?.let { PageNote(it) }
+    if (vm.uploadAuto && vm.uploadWifiHold) PageNote("Only on Wi-Fi is on and this network is metered: the background check and sending wait for Wi-Fi. Opening the app still looks.")
     val u = vm.uploads
     if (u != null) {
         val lines = UploadText.lines(u, vm.uploadWifiHold)

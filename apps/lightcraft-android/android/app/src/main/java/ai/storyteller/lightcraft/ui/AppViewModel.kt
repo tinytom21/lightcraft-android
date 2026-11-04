@@ -36,6 +36,7 @@ import ai.storyteller.lightcraft.engine.PhoneUploads
 import ai.storyteller.lightcraft.engine.PhotoFiles
 import ai.storyteller.lightcraft.engine.UploadScheduler
 import ai.storyteller.lightcraft.engine.UploadSettings
+import ai.storyteller.lightcraft.engine.UploadText
 import ai.storyteller.lightcraft.engine.toImageBitmap
 import android.app.Application
 import android.net.Uri
@@ -394,6 +395,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** "Only on Wi-Fi" is on and the network is metered or missing: photos found automatically are held. */
     var uploadWifiHold by mutableStateOf(false)
+        private set
+
+    /** "Last checked for new camera photos…" while the automatic sending is on (null: off). */
+    var uploadScanNote by mutableStateOf<String?>(null)
         private set
 
     /** The photos sent to the home PC, as of the last [refreshUploads]; null before it is read. */
@@ -1352,6 +1357,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun refreshUploads() {
         val e = engine ?: return
         uploadWifiHold = !PhoneUploads.mayUseNetwork(getApplication(), uploadSettings)
+        uploadScanNote = if (!uploadSettings.auto) null else UploadText.scanLine(
+            uploadSettings.lastScanAt.takeIf { it > 0 }?.let { android.text.format.DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS).toString() },
+            uploadSettings.lastScanFound, uploadSettings.lastScanSkip,
+        )
         runCatching { withContext(Dispatchers.IO) { e.session.cloudUploadStatus() } }.onSuccess { uploads = it }
     }
 
@@ -1365,6 +1374,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 r.failed.firstOrNull()?.let { say("${r.failed.size} photo${if (r.failed.size == 1) "" else "s"} couldn't be queued: $it") }
                 if (r.queued > 0u || r.alreadyQueued > 0u) UploadScheduler.send(getApplication())
             }
+            refreshUploads()
+        }
+    }
+
+    /** Look for new camera photos now (app in front, Cloud library page opened, manual refresh) and send what is found; a no-op while the setting is off. */
+    fun scanCameraNow(why: String) {
+        val e = engine ?: return
+        if (!uploadSettings.auto) return
+        viewModelScope.launch {
+            val scan = runCatching { withContext(Dispatchers.IO) { PhoneUploads.scanCamera(getApplication(), e.session, uploadSettings, why) } }
+            scan.onFailure { Log.w(TAG, "camera scan ($why) failed: ${it.message}") }
+            if (scan.getOrNull()?.queued?.let { it.queued > 0u } == true) UploadScheduler.send(getApplication(), keep = true)
             refreshUploads()
         }
     }
@@ -1391,10 +1412,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back in the app: send the edits and fetch what changed, at most once every 15 seconds. */
-    fun cloudSyncOnResume() = cloudSync(manual = false)
+    fun cloudSyncOnResume() {
+        scanCameraNow("app in front")
+        cloudSync(manual = false)
+    }
 
     /** Refresh now (Preferences): send, fetch and tell what came of it. */
-    fun cloudRefreshNow() = cloudSync(manual = true)
+    fun cloudRefreshNow() {
+        scanCameraNow("refresh")
+        cloudSync(manual = true)
+    }
 
     private fun cloudSync(manual: Boolean) {
         val e = engine ?: return

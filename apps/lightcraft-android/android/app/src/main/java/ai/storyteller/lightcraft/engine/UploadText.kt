@@ -34,6 +34,13 @@ object UploadText {
         return out
     }
 
+    /** "Last checked for new camera photos: 5 minutes ago, found 2" (or why it did not look). [whenText] is null before the first look. */
+    fun scanLine(whenText: String?, found: Int, skip: String?): String = when {
+        whenText == null -> "Not checked for new camera photos yet. It looks when you open the app, when you refresh, and in the background when a photo is added."
+        skip != null -> "Last checked for new camera photos: $whenText. Not looked: $skip."
+        else -> "Last checked for new camera photos: $whenText, found $found."
+    }
+
     /** Whether the status is only history (nothing is being sent or waiting for the PC): it can be dismissed. */
     fun finished(s: UploadState): Boolean = s.waiting.toInt() == 0 && s.awaitingHome.toInt() == 0 && lines(s).isNotEmpty()
 
