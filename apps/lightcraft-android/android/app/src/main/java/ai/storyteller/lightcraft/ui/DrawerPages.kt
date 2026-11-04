@@ -655,7 +655,7 @@ private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
                 else -> askAccess.launch(DeviceMedia.permissions())
             }
         }
-        if (vm.uploadAuto) PageSwitch("Only on Wi-Fi", "Waits for a network that is not metered. Photos you pick yourself are sent on any network.", vm.uploadWifiOnly) { vm.switchUploadWifiOnly(it) }
+        if (vm.uploadAuto) PageSwitch("Only on Wi-Fi", "Photos found automatically wait for a network that is not metered, and never go over mobile data. Photos you pick yourself are sent on any network.", vm.uploadWifiOnly) { vm.switchUploadWifiOnly(it) }
     }
     if (vm.uploadAuto && access != DeviceAccess.FULL) {
         PageNote(
@@ -671,7 +671,7 @@ private fun ColumnScope.PhoneUploadSection(vm: AppViewModel, st: CloudStatus) {
     }
     val u = vm.uploads
     if (u != null) {
-        val lines = UploadText.lines(u)
+        val lines = UploadText.lines(u, vm.uploadWifiHold)
         lines.forEach { line -> PageNote(line, if (" was not added by the home PC: " in line) pageError else pageNote) }
         if (UploadText.finished(u)) PageGroup { PageAction("Dismiss") { vm.clearUploadReport() } }
     }

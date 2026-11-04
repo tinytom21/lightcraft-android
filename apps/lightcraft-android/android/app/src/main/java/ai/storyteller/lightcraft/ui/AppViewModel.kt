@@ -392,6 +392,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var uploadWifiOnly by mutableStateOf(uploadSettings.wifiOnly)
         private set
 
+    /** "Only on Wi-Fi" is on and the network is metered or missing: photos found automatically are held. */
+    var uploadWifiHold by mutableStateOf(false)
+        private set
+
     /** The photos sent to the home PC, as of the last [refreshUploads]; null before it is read. */
     var uploads by mutableStateOf<UploadState?>(null)
         private set
@@ -1347,6 +1351,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Read the state of the photo uploads (cheap, no network). */
     suspend fun refreshUploads() {
         val e = engine ?: return
+        uploadWifiHold = !PhoneUploads.mayUseNetwork(getApplication(), uploadSettings)
         runCatching { withContext(Dispatchers.IO) { e.session.cloudUploadStatus() } }.onSuccess { uploads = it }
     }
 

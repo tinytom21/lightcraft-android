@@ -41,7 +41,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (scan.seen > 0) Log.i(TAG, "camera scan: ${scan.seen} new, ${scan.queued}")
             }
             while (!isStopped) {
-                val step = session.cloudUploadStep()
+                val step = session.cloudUploadStep(PhoneUploads.mayUseNetwork(applicationContext, settings))
                 step.problems.forEach { Log.w(TAG, it) }
                 if (!step.more) break
             }

@@ -137,8 +137,10 @@ library page, under **Send photos to the PC**:
   sent. Turning it on asks to read your photos (Android 13 and later: "Photos and videos"; before that, storage) and nothing else; if you
   refuse, the switch goes back off and the page says why. On Android 14 and later, if you chose "Select photos" the app cannot see new
   photos: the page says so and has a button to the app's settings, where you allow all photos.
-* **Only on Wi-Fi** (on by default, under the automatic switch): the automatic job waits for a network that is not metered. The job also
-  waits for any network at all.
+* **Only on Wi-Fi** (on by default, under the automatic switch): photos found automatically are sent only on a network that is not
+  metered, and never over mobile data, even while photos you picked are being sent (those go on any network). They stay queued and the
+  page says "N waiting for Wi-Fi". Each queued photo is marked picked or automatic; `cloud_upload_step(allow_automatic)` is told by the
+  app whether the current network allows the automatic ones.
 
 **Where they go.** At the PC, into `Phone/<YYYY-MM-DD>` below its photo folder, the day the photo was taken (the camera's EXIF date, else
 the date the gallery has for it, else when it was modified; the day on the phone's clock). The file keeps its name; a name that is taken

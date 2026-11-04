@@ -12,9 +12,9 @@ import org.junit.Test
 /** The Cloud library page's upload status line, and the helpers that name and date the photos that are sent. */
 class UploadTextTest {
     private fun state(
-        total: UInt = 0u, waiting: UInt = 0u, awaitingHome: UInt = 0u, added: UInt = 0u, duplicate: UInt = 0u, known: UInt = 0u,
+        total: UInt = 0u, waiting: UInt = 0u, autoWaiting: UInt = 0u, awaitingHome: UInt = 0u, added: UInt = 0u, duplicate: UInt = 0u, known: UInt = 0u,
         rejected: List<UploadRejected> = emptyList(), heic: UInt = 0u, other: UInt = 0u, done: ULong = 0uL, all: ULong = 0uL,
-    ) = UploadState(total, waiting, awaitingHome, false, added, duplicate, known, rejected, heic, other, done, all)
+    ) = UploadState(total, waiting, autoWaiting, awaitingHome, false, added, duplicate, known, rejected, heic, other, done, all)
 
     @Test
     fun sendingShowsWhereItIs() {
@@ -42,6 +42,15 @@ class UploadTextTest {
     fun refusalsAndKnownPhotosAreListed() {
         val s = state(total = 1u, rejected = listOf(UploadRejected("IMG_1.jpg", "the folder matches an exclude pattern")), known = 2u)
         assertEquals(listOf("2 already in your library, not sent", "IMG_1.jpg was not added by the home PC: the folder matches an exclude pattern"), UploadText.lines(s))
+    }
+
+    @Test
+    fun automaticPhotosWaitForWifiWhenHeld() {
+        val s = state(total = 4u, waiting = 3u, autoWaiting = 3u, awaitingHome = 1u)
+        assertEquals(listOf("1 photo sent. The home PC adds it when it next synchronizes.", "3 waiting for Wi-Fi"), UploadText.lines(s, wifiHold = true))
+        assertEquals(listOf("Sending 2 of 4…"), UploadText.lines(s, wifiHold = false))
+        val mixed = state(total = 4u, waiting = 3u, autoWaiting = 2u, awaitingHome = 1u)
+        assertEquals(listOf("Sending 2 of 4…", "2 waiting for Wi-Fi"), UploadText.lines(mixed, wifiHold = true))
     }
 
     @Test

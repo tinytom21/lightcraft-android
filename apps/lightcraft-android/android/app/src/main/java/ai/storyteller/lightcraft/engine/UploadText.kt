@@ -5,19 +5,22 @@ import ai.storyteller.lightcraft.core.UploadState
 /** What the Cloud library page says about the photos sent to the home PC (docs/cloud-library.md, "Send photos to the PC"). */
 object UploadText {
     /** The lines of the status, in order; empty when there is nothing to say. [rejected] lines are errors, the rest information. */
-    fun lines(s: UploadState): List<String> {
+    fun lines(s: UploadState, wifiHold: Boolean = false): List<String> {
         val out = mutableListOf<String>()
         val total = s.total.toInt()
-        val waiting = s.waiting.toInt()
+        // photos found automatically wait for Wi-Fi when the network is metered and the person asked for Wi-Fi only
+        val held = if (wifiHold) s.automaticWaiting.toInt() else 0
+        val waiting = s.waiting.toInt() - held
         val awaiting = s.awaitingHome.toInt()
         val done = s.added.toInt() + s.duplicate.toInt() + s.rejected.size
         when {
-            waiting > 0 -> out += "Sending ${total - waiting + 1} of $total…" + bytes(s)
+            waiting > 0 -> out += "Sending ${total - s.waiting.toInt() + 1} of $total…" + bytes(s)
             awaiting > 0 -> out += (if (done + awaiting == 1) "1 photo sent" else "${done + awaiting - s.rejected.size} photos sent") +
                 ". The home PC adds ${if (awaiting == 1) "it" else "them"} when it next synchronizes."
             s.added.toInt() + s.duplicate.toInt() > 0 -> out += "${s.added.toInt() + s.duplicate.toInt()} sent" +
                 (if (s.duplicate.toInt() > 0) ", ${s.duplicate} already on the home PC" else "")
         }
+        if (held > 0) out += "$held waiting for Wi-Fi"
         if (s.known.toInt() > 0) out += "${s.known} already in your library, not sent"
         for (r in s.rejected) out += "${r.name} was not added by the home PC: ${r.reason}"
         if (s.skippedHeic.toInt() > 0) {

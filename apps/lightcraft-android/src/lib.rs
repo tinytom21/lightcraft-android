@@ -509,6 +509,8 @@ pub struct UploadPhoto {
     pub date: String,
     /// When it was taken, ms since 1970 UTC; 0 when unknown.
     pub taken_ms: i64,
+    /// Found by the automatic camera job (held back for Wi-Fi when the app asks); false for a photo the person picked.
+    pub automatic: bool,
 }
 
 /// What queueing photos for the home PC did.
@@ -551,6 +553,8 @@ pub struct UploadState {
     pub total: u32,
     /// Not sent yet (the one being sent included).
     pub waiting: u32,
+    /// Of `waiting`, the photos found automatically (they wait for Wi-Fi when `cloud_upload_step` is told not to send them).
+    pub automatic_waiting: u32,
     /// Sent; the home PC has not answered yet (it adds them when it next synchronizes).
     pub awaiting_home: u32,
     /// A step is sending right now.
@@ -619,6 +623,7 @@ fn upload_state(s: lightcraft_cloud_client::UploadStatus) -> UploadState {
     UploadState {
         total: n(s.total),
         waiting: n(s.waiting),
+        automatic_waiting: n(s.automatic_waiting),
         awaiting_home: n(s.awaiting_home),
         sending: s.sending,
         added: n(s.added),
@@ -1483,19 +1488,19 @@ impl MobileSession {
         let lib = self.cloud_library()?;
         let list: Vec<lightcraft_cloud_client::UploadCandidate> = photos
             .into_iter()
-            .map(|p| lightcraft_cloud_client::UploadCandidate { path: p.path.into(), name: p.name, date: p.date, taken_ms: p.taken_ms })
+            .map(|p| lightcraft_cloud_client::UploadCandidate { path: p.path.into(), name: p.name, date: p.date, taken_ms: p.taken_ms, automatic: p.automatic })
             .collect();
         let r = lib.enqueue_uploads(&list).map_err(cloud_err)?;
         let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
         Ok(UploadQueued { queued: n(r.queued), known: n(r.known), already_queued: n(r.already_queued), skipped_heic: n(r.skipped_heic), skipped_other: n(r.skipped_other), failed: r.failed })
     }
 
-    /// Do a bounded amount of the upload queue's work (a few photos, about twenty seconds): read the home PC's answers, send photos,
+    /// Do a bounded amount of the upload queue's work (a few photos, about twenty seconds). `allow_automatic` false (the network is metered and "Only on Wi-Fi" is on) holds back the photos queued by the automatic camera job and sends only the ones the person picked: read the home PC's answers, send photos,
     /// delete the phone's copy of what was answered. Blocks on the network: call it off the main thread. A network failure is an error
     /// (what was sent stays recorded); `more` says to call again at once.
-    pub fn cloud_upload_step(&self) -> Result<UploadProgress, MobileError> {
+    pub fn cloud_upload_step(&self, allow_automatic: bool) -> Result<UploadProgress, MobileError> {
         let lib = self.cloud_library()?;
-        let step = lib.upload_step(&lightcraft_cloud_client::other::UploadBudget::default()).map_err(|e| {
+        let step = lib.upload_step(&lightcraft_cloud_client::other::UploadBudget::default(), allow_automatic).map_err(|e| {
             lib.note_error(&e);
             cloud_err(e)
         })?;

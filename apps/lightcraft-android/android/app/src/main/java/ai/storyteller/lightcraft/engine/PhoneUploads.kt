@@ -81,13 +81,21 @@ object PhoneUploads {
         val staged = mutableListOf<UploadPhoto>()
         val failed = mutableListOf<CameraRow>()
         for (row in look.fresh) {
-            val photo = runCatching { stage(context, session, row.uri, row.takenHint) }.getOrNull()
+            val photo = runCatching { stage(context, session, row.uri, row.takenHint, automatic = true) }.getOrNull()
             if (photo != null) staged += photo else failed += row
         }
         val queued = if (staged.isEmpty()) null else session.cloudEnqueueUploads(staged)
         // what could not be copied (the file was busy) is looked at again next time
         settings.commit(look, failed.map { it.id.toString() }.toSet(), failed.minOfOrNull { it.added })
         return Scan(look.fresh.size, queued)
+    }
+
+    /** Whether photos found automatically may be sent now: not while "Only on Wi-Fi" is on and the network is metered (or there is none). */
+    fun mayUseNetwork(context: Context, settings: UploadSettings): Boolean {
+        if (!settings.wifiOnly) return true
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     /** A camera photo as the gallery lists it. */
@@ -138,7 +146,7 @@ object PhoneUploads {
      * Copy the photo at [uri] to a file for the queue and work out the day it was taken. A name that cannot be sent (HEIC, other types)
      * is not copied: an empty file stands in, and the queue counts it as skipped.
      */
-    fun stage(context: Context, session: MobileSession, uri: Uri, takenHint: Long = 0): UploadPhoto {
+    fun stage(context: Context, session: MobileSession, uri: Uri, takenHint: Long = 0, automatic: Boolean = false): UploadPhoto {
         val resolver = context.contentResolver
         val mime = resolver.getType(uri).orEmpty()
         val name = withExtension(displayName(context, uri) ?: "photo", mime)
@@ -146,12 +154,12 @@ object PhoneUploads {
         val dest = File(dir, "copy-${System.nanoTime()}")
         if (cloudUploadKind(name) != UploadKind.SEND) {
             dest.createNewFile()
-            return UploadPhoto(dest.absolutePath, name, dayOf(System.currentTimeMillis()), 0L)
+            return UploadPhoto(dest.absolutePath, name, dayOf(System.currentTimeMillis()), 0L, automatic)
         }
         try {
             resolver.openInputStream(uri)?.use { input -> dest.outputStream().use { input.copyTo(it) } } ?: error("cannot open $uri")
             val taken = exifTaken(dest) ?: takenHint.takeIf { it > 0 } ?: mediaStoreTaken(context, uri) ?: System.currentTimeMillis()
-            return UploadPhoto(dest.absolutePath, name, exifDay(dest) ?: dayOf(taken), taken)
+            return UploadPhoto(dest.absolutePath, name, exifDay(dest) ?: dayOf(taken), taken, automatic)
         } catch (e: Exception) {
             dest.delete()
             throw e
