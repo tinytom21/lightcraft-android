@@ -897,6 +897,68 @@ fn the_cloud_library_connects_refreshes_sends_edits_and_comes_back_after_a_resta
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// Photos picked on the phone go to the home PC's imports through the real rclone (a folder stands in for the remote): queued, sent in
+/// steps, resumed after a restart, with HEIC and a photo the library has already left out. The home PC's side is tested in the cloud crate.
+#[test]
+fn photos_are_queued_sent_and_survive_a_restart() {
+    if !host_librclone() {
+        eprintln!("skipped: scripts/build-librclone.sh host has not been run");
+        return;
+    }
+    let base = temp_dir("cloud-uploads");
+    let remote = cloud_remote(&base);
+    let conf = base.join("rclone.conf");
+    std::fs::write(&conf, "").unwrap();
+    let lib = base.join("lib");
+    let s = MobileSession::open(lib.to_string_lossy().to_string(), false).unwrap();
+    assert!(s.cloud_upload_dir().is_err(), "nothing is connected");
+    assert!(s.cloud_upload_status().total == 0 && s.cloud_enqueue_uploads(vec![]).is_err());
+    s.cloud_connect(conf.to_string_lossy().to_string(), remote.to_string_lossy().to_string(), "pixel-9".into()).unwrap();
+    s.cloud_refresh().unwrap();
+    let dir = std::path::PathBuf::from(s.cloud_upload_dir().unwrap());
+    let make = |name: &str, bytes: &[u8]| {
+        let p = dir.join(format!("{}-{name}", bytes.len()));
+        std::fs::write(&p, bytes).unwrap();
+        UploadPhoto { path: p.to_string_lossy().into_owned(), name: name.into(), date: "2026-03-14".into(), taken_ms: 1_773_500_000_000 }
+    };
+    let (a, b) = (vec![1u8; 3000], vec![2u8; 5000]);
+    let r = s.cloud_enqueue_uploads(vec![make("IMG_1.jpg", &a), make("IMG_2.jpg", &b), make("IMG_3.heic", &[3u8; 400]), make("clip.webp", &[4u8; 100])]).unwrap();
+    assert_eq!((r.queued, r.skipped_heic, r.skipped_other, r.known), (2, 1, 1, 0), "{r:?}");
+    assert!(r.failed.is_empty());
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "every file handed over was taken");
+    let st = s.cloud_upload_status();
+    assert_eq!((st.total, st.waiting, st.bytes_total, st.skipped_heic), (2, 2, 8000, 1), "{st:?}");
+    assert_eq!(s.cloud_uploads_pending(), 2);
+    // the app is killed before anything was sent
+    drop(s);
+    let s = MobileSession::open(lib.to_string_lossy().to_string(), false).unwrap();
+    assert_eq!(s.cloud_upload_status().waiting, 2, "the queue is on disk");
+    let step = s.cloud_upload_step().unwrap();
+    assert_eq!((step.committed, step.more, step.state.waiting, step.state.awaiting_home, step.state.bytes_done), (2, false, 0, 2, 8000), "{step:?}");
+    let notes: Vec<String> = std::fs::read_dir(remote.join("imports/pixel-9")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".json")).collect();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    let note: serde_json::Value = serde_json::from_slice(&std::fs::read(remote.join("imports/pixel-9").join(&notes[0])).unwrap()).unwrap();
+    assert_eq!(note["folder"], "Phone/2026-03-14");
+    // the home PC has not answered: another step sends nothing and asks again later
+    let step = s.cloud_upload_step().unwrap();
+    assert_eq!((step.committed, step.answered, step.state.awaiting_home), (0, 0, 2));
+    // the home PC answers
+    let done = remote.join("imports-done/2099-01-01/pixel-9");
+    std::fs::create_dir_all(&done).unwrap();
+    for (i, n) in notes.iter().enumerate() {
+        let id = n.trim_end_matches(".json");
+        let status = if i == 0 { r#"{"id":"x","status":"added","path":"Phone/2026-03-14/IMG.jpg","reason":null}"# } else { r#"{"id":"x","status":"rejected","path":null,"reason":"the folder is excluded"}"# };
+        std::fs::write(done.join(format!("{id}.result.json")), status).unwrap();
+    }
+    let step = s.cloud_upload_step().unwrap();
+    assert_eq!((step.answered, step.state.added, step.state.rejected.len(), step.state.awaiting_home), (2, 1, 1, 0), "{step:?}");
+    assert_eq!(step.state.rejected[0].reason, "the folder is excluded");
+    assert_eq!(s.cloud_uploads_pending(), 0);
+    s.cloud_clear_upload_report().unwrap();
+    assert_eq!(s.cloud_upload_status().total, 0);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// The PC's albums arrive as ordinary albums in a "From PC" folder, follow the PC's renames and removals, are put back when edited here,
 /// and leave the user's own albums alone. (The album folder shows in the phone's albums list like any folder, so the app needs no change.)
 #[test]

@@ -498,6 +498,79 @@ pub struct CloudPhotos {
     pub versions: std::collections::HashMap<u64, String>,
 }
 
+/// A photo the app hands to the upload queue ([`MobileSession::cloud_enqueue_uploads`]).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct UploadPhoto {
+    /// A file the app made of the photo, in the folder [`MobileSession::cloud_upload_dir`] names. It is taken: moved into the queue, or deleted.
+    pub path: String,
+    /// The photo's file name with its extension.
+    pub name: String,
+    /// The local date it was taken, `YYYY-MM-DD` (the folder `Phone/<date>` at the home PC).
+    pub date: String,
+    /// When it was taken, ms since 1970 UTC; 0 when unknown.
+    pub taken_ms: i64,
+}
+
+/// What queueing photos for the home PC did.
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct UploadQueued {
+    pub queued: u32,
+    /// The cloud library has the photo already.
+    pub known: u32,
+    pub already_queued: u32,
+    /// HEIC / HEIF: LightCraft cannot read them yet, so they are not sent.
+    pub skipped_heic: u32,
+    /// Another format the home PC does not take.
+    pub skipped_other: u32,
+    /// `name: why` for photos that could not be queued.
+    pub failed: Vec<String>,
+}
+
+/// A photo the home PC refused.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct UploadRejected {
+    pub name: String,
+    pub reason: String,
+}
+
+/// The photo uploads to the home PC, for a status line; cheap (no network).
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct UploadState {
+    /// Photos of this batch: waiting, sent, and answered.
+    pub total: u32,
+    /// Not sent yet (the one being sent included).
+    pub waiting: u32,
+    /// Sent; the home PC has not answered yet (it adds them when it next synchronizes).
+    pub awaiting_home: u32,
+    /// A step is sending right now.
+    pub sending: bool,
+    /// The home PC added them / had them already.
+    pub added: u32,
+    pub duplicate: u32,
+    /// Photos offered that the library had already.
+    pub known: u32,
+    pub rejected: Vec<UploadRejected>,
+    pub skipped_heic: u32,
+    pub skipped_other: u32,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+}
+
+/// What one upload step did.
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct UploadProgress {
+    /// Photos whose commit note was written in this step.
+    pub committed: u32,
+    pub files_sent: u32,
+    pub bytes_sent: u64,
+    /// Photos the home PC answered in this step.
+    pub answered: u32,
+    /// The step stopped with photos left to send: call again.
+    pub more: bool,
+    pub problems: Vec<String>,
+    pub state: UploadState,
+}
+
 /// The connection settings of the cloud library, kept in the library folder (`cloud.json`).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -528,6 +601,24 @@ fn librclone_path() -> Option<std::path::PathBuf> {
 
 fn cloud_err(e: lightcraft_cloud_client::Error) -> MobileError {
     MobileError::Cloud(e.to_string())
+}
+
+fn upload_state(s: lightcraft_cloud_client::UploadStatus) -> UploadState {
+    let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+    UploadState {
+        total: n(s.total),
+        waiting: n(s.waiting),
+        awaiting_home: n(s.awaiting_home),
+        sending: s.sending,
+        added: n(s.added),
+        duplicate: n(s.duplicate),
+        known: n(s.known),
+        rejected: s.rejected.into_iter().map(|r| UploadRejected { name: r.name, reason: r.reason }).collect(),
+        skipped_heic: n(s.skipped_heic),
+        skipped_other: n(s.skipped_other),
+        bytes_done: s.bytes_done,
+        bytes_total: s.bytes_total,
+    }
 }
 
 /// The engine version (`0.4.0`).
@@ -1353,6 +1444,54 @@ impl MobileSession {
     /// Empty when nothing is connected.
     pub fn cloud_photos(&self) -> CloudPhotos {
         self.cloud_library().map(|l| { let (ids, previews) = l.photo_ids(); CloudPhotos { ids, previews, versions: l.content_versions().into_iter().collect() } }).unwrap_or_default()
+    }
+
+    /// The folder the app copies photos into before it hands them to [`MobileSession::cloud_enqueue_uploads`] (the same file system as
+    /// the queue, so handing over is a rename). Made if it is not there.
+    pub fn cloud_upload_dir(&self) -> Result<String, MobileError> {
+        Ok(self.cloud_library()?.upload_staging_dir().to_string_lossy().into_owned())
+    }
+
+    /// Queue photos to be sent to the home PC (they land in `Phone/<date>` below its photo folder). Photos the cloud library has
+    /// already, HEIC / HEIF and formats the home PC does not take are counted, not queued. Every file handed over is taken. No
+    /// network: sending is [`MobileSession::cloud_upload_step`].
+    pub fn cloud_enqueue_uploads(&self, photos: Vec<UploadPhoto>) -> Result<UploadQueued, MobileError> {
+        let lib = self.cloud_library()?;
+        let list: Vec<lightcraft_cloud_client::UploadCandidate> = photos
+            .into_iter()
+            .map(|p| lightcraft_cloud_client::UploadCandidate { path: p.path.into(), name: p.name, date: p.date, taken_ms: p.taken_ms })
+            .collect();
+        let r = lib.enqueue_uploads(&list).map_err(cloud_err)?;
+        let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+        Ok(UploadQueued { queued: n(r.queued), known: n(r.known), already_queued: n(r.already_queued), skipped_heic: n(r.skipped_heic), skipped_other: n(r.skipped_other), failed: r.failed })
+    }
+
+    /// Do a bounded amount of the upload queue's work (a few photos, about twenty seconds): read the home PC's answers, send photos,
+    /// delete the phone's copy of what was answered. Blocks on the network: call it off the main thread. A network failure is an error
+    /// (what was sent stays recorded); `more` says to call again at once.
+    pub fn cloud_upload_step(&self) -> Result<UploadProgress, MobileError> {
+        let lib = self.cloud_library()?;
+        let step = lib.upload_step(&lightcraft_cloud_client::other::UploadBudget::default()).map_err(|e| {
+            lib.note_error(&e);
+            cloud_err(e)
+        })?;
+        let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+        Ok(UploadProgress { committed: n(step.committed), files_sent: n(step.files_sent), bytes_sent: step.bytes_sent, answered: n(step.results.len()), more: step.more, problems: step.problems, state: upload_state(step.status) })
+    }
+
+    /// The state of the photo uploads; cheap (no network). All zero when nothing was queued or the report was cleared.
+    pub fn cloud_upload_status(&self) -> UploadState {
+        self.cloud_library().map(|l| upload_state(l.upload_status())).unwrap_or_default()
+    }
+
+    /// Photos queued that the home PC has not answered yet (waiting to be sent, or sent and waiting for its next sync).
+    pub fn cloud_uploads_pending(&self) -> u32 {
+        self.cloud_library().map(|l| u32::try_from(l.uploads_pending()).unwrap_or(u32::MAX)).unwrap_or(0)
+    }
+
+    /// Clear the finished part of the upload status (counts, refusals, skipped photos). Photos still being sent stay.
+    pub fn cloud_clear_upload_report(&self) -> Result<(), MobileError> {
+        self.cloud_library()?.clear_upload_report().map_err(cloud_err)
     }
 
     /// Photo ids of the partners of raw+JPEG pairs, as of the last refresh: leave them out of the grid.
