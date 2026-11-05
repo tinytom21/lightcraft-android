@@ -2208,7 +2208,8 @@ dependencies = [
 
 [[package]]
 name = "lightcraft-cloud-client"
-version = "0.2.1"
+version = "0.3.0"
+source = "git+https://github.com/tinytom21/lightcraft-cloud?rev=d1138a2d6e6c1506b70d11ab48349e754c959e9c#d1138a2d6e6c1506b70d11ab48349e754c959e9c"
 dependencies = [
  "argon2",
  "chacha20poly1305",
