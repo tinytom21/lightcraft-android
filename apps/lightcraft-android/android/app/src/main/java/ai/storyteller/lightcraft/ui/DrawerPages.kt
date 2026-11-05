@@ -563,6 +563,10 @@ private fun ColumnScope.CloudConnect(vm: AppViewModel) {
 private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
     var confirm by remember { mutableStateOf(false) }
     val busy = vm.cloudBusy
+    // (Refresh now first, where it is found; Disconnect stays at the bottom, away from it)
+    PageGroup {
+        PageAction(busy ?: "Refresh now", enabled = busy == null) { vm.cloudRefreshNow() }
+    }
     PageGroup {
         PageFact("Remote", st.remote)
         PageFact("This phone", st.device)
@@ -585,7 +589,6 @@ private fun ColumnScope.CloudConnected(vm: AppViewModel, st: CloudStatus) {
     }
     PageNote("The least recently opened previews are deleted first and downloaded again when you open the photo.")
     PageGroup {
-        PageAction(busy ?: "Refresh now", enabled = busy == null) { vm.cloudRefreshNow() }
         PageAction("Disconnect", enabled = busy == null) { confirm = true }
     }
     if (confirm) {
